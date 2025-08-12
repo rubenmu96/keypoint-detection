@@ -1,0 +1,29 @@
+[project]
+name = "keypoint-detection"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Ruben Mustad",email = "mustadruben@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy (>=2.2.5,<3.0.0)",
+    "torch (>=2.7.0,<3.0.0)",
+    "torchvision (>=0.22.0,<0.23.0)",
+    "matplotlib (>=3.10.1,<4.0.0)",
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "albumentations (>=2.0.6,<3.0.0)",
+    "transformers (>=4.51.3,<5.0.0)",
+    "pytubefix (>=9.1.1,<10.0.0)",
+    "validators (>=0.35.0,<0.36.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.30.0"
+
