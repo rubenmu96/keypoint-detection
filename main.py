@@ -2,7 +2,7 @@ import torch
 import transformers
 import math 
 from torch.utils.data import DataLoader
-from src.utils import get_model_and_config
+from src.utils import get_model_and_config, update_cfg_from_args
 from src.core import KeypointData, CollateFunction
 from src.trainer import Trainer
 import argparse
@@ -11,7 +11,10 @@ from config import BaseConfig
 def main(args):
     model, cfg = get_model_and_config(args.model_name)
 
-    print(cfg.model_name, cfg.criterion)
+    # Update config based on args
+    cfg = update_cfg_from_args(cfg, args)
+
+    print(cfg.model_name, cfg.criterion, cfg.learn_rate)
 
     model = model.to(cfg.device)
     collate_fn = CollateFunction(cfg.model_name)
@@ -30,7 +33,6 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn
     )
-    # learn rate is not influenced by args, need to swap cfg params with args params
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay)
     num_train_steps = math.ceil(len(train_data) / cfg.batch_size) * cfg.epochs
     scheduler = transformers.get_cosine_schedule_with_warmup(

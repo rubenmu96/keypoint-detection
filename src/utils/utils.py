@@ -64,6 +64,13 @@ def keypoints_with_visibility(kps, visibility=None):
         visibility = [1] * len(kps)
     return torch.tensor([[x, y, v] for (x, y), v in zip(kps, visibility)], dtype=torch.float32)
 
+
+def update_cfg_from_args(cfg, args):
+    for key, value in vars(args).items():
+        if hasattr(cfg, key):
+            setattr(cfg, key, value)
+    return cfg
+
 def get_model_and_config(name="resnet", classes=None):
     name = name.lower()
     

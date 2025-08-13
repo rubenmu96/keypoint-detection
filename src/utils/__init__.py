@@ -4,5 +4,6 @@ from .utils import (
     get_model_and_config,
     are_keypoints_valid,
     keypoints_with_visibility,
-    keypoints_to_bbox
+    keypoints_to_bbox,
+    update_cfg_from_args
 )
