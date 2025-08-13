@@ -1,12 +1,17 @@
+from torch.utils.data import DataLoader
+from src.utils import (
+    get_model_and_config,
+    update_cfg_from_args,
+    config_to_dict
+)
+from src.core import KeypointData, CollateFunction
+from src.trainer import Trainer
+from config import BaseConfig
 import torch
 import transformers
 import math 
-from torch.utils.data import DataLoader
-from src.utils import get_model_and_config, update_cfg_from_args
-from src.core import KeypointData, CollateFunction
-from src.trainer import Trainer
 import argparse
-from config import BaseConfig
+import json
 
 def main(args):
     model, cfg = get_model_and_config(args.model_name)
@@ -33,7 +38,9 @@ def main(args):
         shuffle=True,
         collate_fn=collate_fn
     )
-    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay
+    )
     num_train_steps = math.ceil(len(train_data) / cfg.batch_size) * cfg.epochs
     scheduler = transformers.get_cosine_schedule_with_warmup(
         optimizer,
@@ -48,11 +55,11 @@ def main(args):
         criterion=cfg.criterion,
         scheduler=scheduler,
     )
-    # TODO: save model and config 
-    # TODO: fix index warning in torch.meshgrid()
-    # TODO: add display sample images
     train.train(train_loader, valid_loader)
 
+    config_dict = config_to_dict(cfg)
+    with open(f'{args.model_name}_config.json', 'w') as f:
+        json.dump(config_dict, f, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

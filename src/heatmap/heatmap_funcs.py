@@ -14,7 +14,7 @@ def create_heatmap(keypoints, output_shape, sigma=1):
             if x > 0 or y > 0:
                 x_coord = torch.arange(0, W, device=keypoints.device).float()
                 y_coord = torch.arange(0, H, device=keypoints.device).float()
-                yy, xx = torch.meshgrid(y_coord, x_coord) # indexing "ij"?
+                yy, xx = torch.meshgrid(y_coord, x_coord, indexing="ij")
                 
                 x_px = x * (W - 1)
                 y_px = y * (H - 1)

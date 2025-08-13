@@ -6,6 +6,7 @@ import cv2
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 import matplotlib.pyplot as plt
+import os
 
 class Trainer:
     def __init__(self, cfg, model, optimizer, criterion, scheduler=None):
@@ -85,8 +86,10 @@ class Trainer:
         stop = es >= patience
         return es, best_loss, stop
     
-    def display_sample_images(self, cfg, model, image_path, epoch, name):
-        # need to create directory for sample_images
+    def display_sample_images(self, cfg, model, image_path, epoch, name, folder_path="sample_images"):
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
         def draw_keypoints(image, keypoints):
             image = image.copy()
             for i in range(0, len(keypoints), 2):
@@ -95,7 +98,7 @@ class Trainer:
                 cv2.putText(image, str(i//2), (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
             plt.imshow(image)
-            plt.savefig(f"sample_images/{name}_{epoch}.png")
+            plt.savefig(f"{folder_path}/{name}_{epoch}.png")
 
         transform = A.Compose([
             A.Resize(width=cfg.width, height=cfg.height),

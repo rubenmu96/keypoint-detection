@@ -1,4 +1,5 @@
 import torch
+import inspect
 from src.models import (
     ResNetKeypoint,
     ResNetHeatmap,
@@ -100,3 +101,28 @@ def get_model_and_config(name="resnet", classes=None):
         pass 
     cfg.model_name = model.__class__.__name__
     return model, cfg
+
+
+def config_to_dict(config):
+    """Convert a config object (or class) to a serializable dictionary."""
+    if inspect.isclass(config):
+        # Handle class (like BaseConfig)
+        attrs = {k: v for k, v in vars(config).items() 
+                if not k.startswith('__') and not callable(v)}
+    else:
+        # Handle instance (like HeatmapConfig)
+        attrs = {k: v for k, v in vars(config).items() 
+                if not k.startswith('__') and k != 'base' and not callable(v)}
+    
+    # Handle nested base config
+    if hasattr(config, 'base'):
+        attrs['__base_config__'] = config_to_dict(config.base)
+    
+    # Handle non-serializable objects (simplified)
+    for k, v in attrs.items():
+        if isinstance(v, torch.device):
+            attrs[k] = str(v)
+        elif isinstance(v, torch.nn.Module):
+            attrs[k] = v.__class__.__name__  # Save only the class name
+    
+    return attrs

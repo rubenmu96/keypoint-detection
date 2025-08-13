@@ -5,5 +5,6 @@ from .utils import (
     are_keypoints_valid,
     keypoints_with_visibility,
     keypoints_to_bbox,
-    update_cfg_from_args
+    update_cfg_from_args,
+    config_to_dict
 )
