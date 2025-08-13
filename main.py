@@ -2,12 +2,9 @@ import torch
 import transformers
 import math 
 from torch.utils.data import DataLoader
-from utils import (
-    get_model_and_config,
-    KeypointData,
-    CollateFunction
-)
-from trainer import Trainer
+from src.utils import get_model_and_config
+from src.core import KeypointData, CollateFunction
+from src.trainer import Trainer
 import argparse
 from config import BaseConfig
 

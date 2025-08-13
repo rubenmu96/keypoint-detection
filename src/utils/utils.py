@@ -1,5 +1,5 @@
 import torch
-from models import (
+from src.models import (
     ResNetKeypoint,
     ResNetHeatmap,
     KeypointRCNN

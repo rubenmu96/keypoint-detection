@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
-from utils import (
+from src.utils import (
     are_keypoints_valid,
     keypoints_with_visibility,
     keypoints_to_bbox,
