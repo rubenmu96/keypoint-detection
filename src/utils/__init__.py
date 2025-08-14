@@ -8,3 +8,4 @@ from .utils import (
     update_cfg_from_args,
     config_to_dict
 )
+from .heatmap_funcs import create_heatmap, extract_keypoints

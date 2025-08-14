@@ -15,11 +15,7 @@ import json
 
 def main(args):
     model, cfg = get_model_and_config(args.model_name)
-
-    # Update config based on args
     cfg = update_cfg_from_args(cfg, args)
-
-    print(cfg.model_name, cfg.criterion, cfg.learn_rate)
 
     model = model.to(cfg.device)
     collate_fn = CollateFunction(cfg.model_name)
@@ -68,6 +64,5 @@ if __name__ == "__main__":
     parser.add_argument('--learn_rate', type=float, default=BaseConfig().learn_rate, help='Learning rate')
     parser.add_argument('--epochs', type=int, default=BaseConfig().epochs, help='Epochs')
     args = parser.parse_args()
-    print(args)
 
     main(args)

@@ -1,7 +1,6 @@
 from src.core import compute_loss
 import torch
-from src.utils import keypoint_unscaler
-from src.heatmap import extract_keypoints
+from src.utils import keypoint_unscaler, extract_keypoints
 import cv2
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2

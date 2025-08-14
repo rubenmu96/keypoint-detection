@@ -1,6 +1,6 @@
 import pandas as pd
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 from src.utils import (
@@ -52,27 +52,22 @@ class KeypointPyTorch(Dataset):
 
     def __getitem__(self, idx):
         item = self.data.iloc[idx]
-        
-        # Load image
         image_path = f"{self.img_dir}/{item['id']}.png"
         image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-        
-        # will this work when imread is inside?
         if image is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
+        
         h, w, _ = image.shape
 
         keypoints = np.array(item["kps"], dtype=np.float32).reshape(-1, 2)
 
-        # need to clip based on actual image size
         keypoints = self.clip_kps(keypoints, width=w, height=h)
         
         transformed = self.transform(image=image, keypoints=keypoints)
         image = transformed["image"]
         keypoints = np.array(transformed["keypoints"], dtype=np.float32)
 
-        # keep or remove? 
-        # keypoints = self.clip_kps(keypoints, width=self.width, height=self.height)
+        keypoints = self.clip_kps(keypoints, width=self.width, height=self.height)
 
         if self.cfg.model_name == "KeypointRCNN":
             keypoints_tensor = keypoints_with_visibility(keypoints)
@@ -90,7 +85,6 @@ class KeypointPyTorch(Dataset):
             }
             return image, target
         else:
-            # make flatten an option in __init__?
             target = keypoint_scaler(keypoints.flatten(), self.width, self.height, self.scale)
             target = torch.tensor(target, dtype=torch.float32)
             return image, target
@@ -140,7 +134,6 @@ class KeypointData:
         return train_data, valid_data
 
     def get_data(self, model_name):
-        # any downsides by doing the PyTorch dataset inside here?
         if model_name == "KeypointRCNN":
             train, valid = self._get_data_rcnn()
         else:

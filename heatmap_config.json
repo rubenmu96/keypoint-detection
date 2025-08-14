@@ -1,0 +1,66 @@
+{
+    "model_size": 512,
+    "input_size": 512,
+    "weights": "IMAGENET1K_V1",
+    "pretrained": true,
+    "sigma": 1,
+    "scale": [
+        0,
+        1
+    ],
+    "mean": [
+        0.485,
+        0.456,
+        0.406
+    ],
+    "std": [
+        0.229,
+        0.224,
+        0.225
+    ],
+    "save_path": "heatmap_pretrained_resnet18_224x224.pth",
+    "model_name": "ResNetHeatmap",
+    "__base_config__": {
+        "path": "dataset/tennis_court_det_dataset/data/",
+        "train_json": "dataset/tennis_court_det_dataset/data/data_train.json",
+        "valid_json": "dataset/tennis_court_det_dataset/data/data_val.json",
+        "img_dir": "dataset/tennis_court_det_dataset/data/images",
+        "device": "cpu",
+        "width": 672,
+        "height": 448,
+        "batch_size": 16,
+        "epochs": 35,
+        "patience": null,
+        "learn_rate": 0.0005,
+        "weight_decay": 0.0001,
+        "warmup_ratio": 0.15,
+        "num_kps": 14,
+        "num_coords": 28,
+        "reset": true,
+        "mean": [
+            0.485,
+            0.456,
+            0.406
+        ],
+        "std": [
+            0.229,
+            0.224,
+            0.225
+        ],
+        "train_aug": null,
+        "pretrained": true,
+        "display_examples": true,
+        "display_names": [
+            "clay",
+            "fed",
+            "synframe",
+            "synthetic"
+        ],
+        "sample_image_path": [
+            "dataset/sample_images/clay.jpg",
+            "dataset/sample_images/fed.jpg",
+            "dataset/sample_images/synframe.jpg",
+            "dataset/sample_images/synthetic.jpg"
+        ]
+    }
+}

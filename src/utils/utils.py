@@ -104,25 +104,36 @@ def get_model_and_config(name="resnet", classes=None):
 
 
 def config_to_dict(config):
-    """Convert a config object (or class) to a serializable dictionary."""
     if inspect.isclass(config):
-        # Handle class (like BaseConfig)
         attrs = {k: v for k, v in vars(config).items() 
                 if not k.startswith('__') and not callable(v)}
     else:
-        # Handle instance (like HeatmapConfig)
         attrs = {k: v for k, v in vars(config).items() 
                 if not k.startswith('__') and k != 'base' and not callable(v)}
     
-    # Handle nested base config
     if hasattr(config, 'base'):
         attrs['__base_config__'] = config_to_dict(config.base)
     
-    # Handle non-serializable objects (simplified)
     for k, v in attrs.items():
         if isinstance(v, torch.device):
             attrs[k] = str(v)
         elif isinstance(v, torch.nn.Module):
-            attrs[k] = v.__class__.__name__  # Save only the class name
+            attrs[k] = v.__class__.__name__
     
     return attrs
+
+
+def dict_to_config(d, model_config, base_config_class=None):
+    base_dict = d.pop('__base_config__', None)
+    if base_dict and base_config_class:
+        base_config = base_config_class()
+        for k, v in base_dict.items():
+            setattr(base_config, k, v)
+    else:
+        base_config = None
+    
+    config = model_config(base_config=base_config_class)
+    for k, v in d.items():
+        setattr(config, k, v)
+    
+    return config
