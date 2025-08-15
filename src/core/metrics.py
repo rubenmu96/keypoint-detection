@@ -1,4 +1,4 @@
-from src.heatmap import create_heatmap
+from src.utils import create_heatmap
 import torch
 import torch.functional as F
 

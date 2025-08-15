@@ -57,7 +57,7 @@ HeatmapConfig = ModelConfig(
     scale=(0, 1),
     mean=(0.485, 0.456, 0.406),
     std=(0.229, 0.224, 0.225),
-    save_path="heatmap_pretrained_resnet18_224x224.pth",
+    save_path="heatmap_pretrained_resnet18_672x448.pth",
 )
 
 RCNNConfig = ModelConfig(

@@ -44,6 +44,10 @@ def main(args):
         num_training_steps=num_train_steps
     )
 
+    config_dict = config_to_dict(cfg)
+    with open(f'{args.model_name}_config.json', 'w') as f:
+        json.dump(config_dict, f, indent=4)
+
     train = Trainer(
         cfg=cfg,
         model=model,
@@ -52,10 +56,6 @@ def main(args):
         scheduler=scheduler,
     )
     train.train(train_loader, valid_loader)
-
-    config_dict = config_to_dict(cfg)
-    with open(f'{args.model_name}_config.json', 'w') as f:
-        json.dump(config_dict, f, indent=4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
