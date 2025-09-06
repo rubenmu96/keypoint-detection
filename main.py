@@ -14,8 +14,10 @@ import argparse
 import json
 
 def main(args):
-    model, cfg = get_model_and_config(args.model_name)
+    model, cfg = get_model_and_config(args.name)
     cfg = update_cfg_from_args(cfg, args)
+
+    print(cfg.model_name)
 
     model = model.to(cfg.device)
     collate_fn = CollateFunction(cfg.model_name)
@@ -45,7 +47,7 @@ def main(args):
     )
 
     config_dict = config_to_dict(cfg)
-    with open(f'{args.model_name}_config.json', 'w') as f:
+    with open(f'{args.name}_config.json', 'w') as f:
         json.dump(config_dict, f, indent=4)
 
     train = Trainer(
@@ -57,9 +59,11 @@ def main(args):
     )
     train.train(train_loader, valid_loader)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', type=str, default="heatmap", help="resnet, heatmap, or rcnn")
+    # parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name
+    parser.add_argument('--name', type=str, default="resnet", help="resnet, heatmap, or rcnn") # find a different name
     parser.add_argument('--batch_size', type=int, default=BaseConfig().batch_size, help='Batch size')
     parser.add_argument('--learn_rate', type=float, default=BaseConfig().learn_rate, help='Learning rate')
     parser.add_argument('--epochs', type=int, default=BaseConfig().epochs, help='Epochs')

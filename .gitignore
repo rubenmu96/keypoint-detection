@@ -1,3 +1,5 @@
 *.pyc
 *.pth
 dataset/tennis_court_det_dataset
+
+sample_images/

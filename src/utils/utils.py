@@ -81,7 +81,7 @@ def get_model_and_config(name="resnet", classes=None):
         model = ResNetKeypoint(
             model=cfg.model,
             weights=cfg.weights,
-            num_kps=cfg.num_coords,
+            num_kps=cfg.num_kps,
             pretrained=cfg.pretrained
         )
     elif name == "heatmap":

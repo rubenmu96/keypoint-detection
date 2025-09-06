@@ -43,6 +43,7 @@ class VideoProcessor:
         return self._contains_mp4(f"{folder}{youtube.title}")
 
     def extract_video_segment(self, input_path, output_path, start_time, end_time):
+        input_path = "examples/tennis_match.mp4"
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
             raise ValueError(f"Could not open video: {input_path}")

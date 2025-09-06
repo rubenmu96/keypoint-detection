@@ -19,13 +19,25 @@ def _calculate_keypoint_mse(pred_kps, target_kps, criterion=None):
     mse = F.mse_loss(stacked_preds[..., :2], stacked_targets[..., :2])
     return mse
 
+# def compute_loss(cfg, criterion, preds, targets):
+#     if cfg.model_name == "ResNetHeatmap":
+#         target_heatmap = create_heatmap(
+#             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
+#         )
+#         return criterion(preds, target_heatmap)
+#     elif cfg.model_name == "KeypointRCNN": # only during evaluation
+#         return _calculate_keypoint_mse(preds, targets, criterion)
+#     else:
+#         return criterion(preds, targets)
+
 def compute_loss(cfg, criterion, preds, targets):
     if cfg.model_name == "ResNetHeatmap":
-        target_heatmap = create_heatmap(
+        targets = create_heatmap(
             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
         )
-        return criterion(preds, target_heatmap)
     elif cfg.model_name == "KeypointRCNN": # only during evaluation
-        return _calculate_keypoint_mse(preds, targets, criterion)
-    else:
-        return criterion(preds, targets)
+        loss = _calculate_keypoint_mse(preds, targets, criterion)
+        return loss
+    
+    loss = criterion(preds, targets)
+    return loss
