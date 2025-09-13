@@ -6,6 +6,7 @@ from .utils import (
     keypoints_with_visibility,
     keypoints_to_bbox,
     update_cfg_from_args,
-    config_to_dict
+    model_dictionary,
+    load_model_inference
 )
 from .heatmap_funcs import create_heatmap, extract_keypoints

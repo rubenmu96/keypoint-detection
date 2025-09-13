@@ -10,6 +10,9 @@ from config import (
     HeatmapConfig,
     RCNNConfig,
 )
+from torchvision import models
+# move some of the functions to processing/pre_processing.py and post_processing.py?
+# should add handling of low probability/thresholds
 
 def keypoint_scaler(kps, width, height, scale=None):
     if scale == (-1, 1):
@@ -72,6 +75,18 @@ def update_cfg_from_args(cfg, args):
             setattr(cfg, key, value)
     return cfg
 
+model_dictionary = {
+    "resnet18": {
+        "model": models.resnet18, "model_size": 512, "input_size": 512
+    }, 
+    "resnet34": {
+        "model": models.resnet34, "model_size": 512, "input_size": 512
+    },
+    "resnet50": {
+        "model": models.resnet50, "model_size": 2048, "input_size": 2048
+    }
+}
+
 def get_model_and_config(name="resnet", classes=None):
     name = name.lower()
     
@@ -87,11 +102,11 @@ def get_model_and_config(name="resnet", classes=None):
     elif name == "heatmap":
         cfg = HeatmapConfig
         model = ResNetHeatmap(
-            model=cfg.model,
+            model=model_dictionary[cfg.model]["model"],
             weights=cfg.weights,
             num_kps=cfg.num_kps,
-            model_size=cfg.model_size,
-            input_size=cfg.input_size,
+            model_size=model_dictionary[cfg.model]["model_size"],
+            input_size=model_dictionary[cfg.model]["input_size"],
             pretrained=cfg.pretrained
         )
     elif name == "rcnn":
@@ -103,37 +118,13 @@ def get_model_and_config(name="resnet", classes=None):
     return model, cfg
 
 
-def config_to_dict(config):
-    if inspect.isclass(config):
-        attrs = {k: v for k, v in vars(config).items() 
-                if not k.startswith('__') and not callable(v)}
-    else:
-        attrs = {k: v for k, v in vars(config).items() 
-                if not k.startswith('__') and k != 'base' and not callable(v)}
-    
-    if hasattr(config, 'base'):
-        attrs['__base_config__'] = config_to_dict(config.base)
-    
-    for k, v in attrs.items():
-        if isinstance(v, torch.device):
-            attrs[k] = str(v)
-        elif isinstance(v, torch.nn.Module):
-            attrs[k] = v.__class__.__name__
-    
-    return attrs
-
-
-def dict_to_config(d, model_config, base_config_class=None):
-    base_dict = d.pop('__base_config__', None)
-    if base_dict and base_config_class:
-        base_config = base_config_class()
-        for k, v in base_dict.items():
-            setattr(base_config, k, v)
-    else:
-        base_config = None
-    
-    config = model_config(base_config=base_config_class)
-    for k, v in d.items():
-        setattr(config, k, v)
-    
-    return config
+def load_model_inference(name, config):
+    if name == "heatmap":
+        model = ResNetHeatmap(
+            model=model_dictionary[config.model]["model"],
+            weights=config.weights,
+            num_kps=config.num_kps,
+            model_size=model_dictionary[config.model]["model_size"],
+            input_size=model_dictionary[config.model]["input_size"],
+        )
+    return model

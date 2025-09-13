@@ -2,6 +2,12 @@ from src.utils import create_heatmap
 import torch
 import torch.functional as F
 
+loss_dictionary = {
+    "bcelogitloss": torch.nn.BCEWithLogitsLoss(),
+    "mseloss": torch.nn.MSELoss(),
+    "smoothl1loss": torch.nn.SmoothL1Loss()
+}
+
 def _calculate_keypoint_mse(pred_kps, target_kps, criterion=None):
     # Also use num_kps as argument instead of 14? or -1 if it works?
     def select_first_object(keypoints_list):
@@ -31,6 +37,7 @@ def _calculate_keypoint_mse(pred_kps, target_kps, criterion=None):
 #         return criterion(preds, targets)
 
 def compute_loss(cfg, criterion, preds, targets):
+    criterion = loss_dictionary[criterion]
     if cfg.model_name == "ResNetHeatmap":
         targets = create_heatmap(
             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma

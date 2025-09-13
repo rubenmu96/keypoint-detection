@@ -1,12 +1,8 @@
 from torch.utils.data import DataLoader
-from src.utils import (
-    get_model_and_config,
-    update_cfg_from_args,
-    config_to_dict
-)
+from src.utils import get_model_and_config, update_cfg_from_args
 from src.core import KeypointData, CollateFunction
 from src.trainer import Trainer
-from config import BaseConfig
+from config import BaseConfig, config_to_dict
 import torch
 import transformers
 import math 
@@ -62,8 +58,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name
-    parser.add_argument('--name', type=str, default="resnet", help="resnet, heatmap, or rcnn") # find a different name
+    parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name
     parser.add_argument('--batch_size', type=int, default=BaseConfig().batch_size, help='Batch size')
     parser.add_argument('--learn_rate', type=float, default=BaseConfig().learn_rate, help='Learning rate')
     parser.add_argument('--epochs', type=int, default=BaseConfig().epochs, help='Epochs')

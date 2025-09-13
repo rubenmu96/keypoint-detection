@@ -22,16 +22,16 @@ def create_heatmap(keypoints, output_shape, sigma=1):
                 heatmaps[b,k] = torch.exp(-((xx - x_px)**2 + (yy - y_px)**2) / (2 * sigma**2))
     return heatmaps
 
-def extract_keypoints(heatmaps):
+def extract_keypoints(heatmaps, return_max_values=False):
     batch_size, num_keys, H, W = heatmaps.shape
     device = heatmaps.device
     
     keypoints = torch.zeros(batch_size, num_keys * 2, device=device)
-    
+    max_values = []
     for b in range(batch_size):
         for k in range(num_keys):
             heatmap = heatmaps[b, k]
-            _, max_idx = torch.max(heatmap.view(-1), dim=0)
+            max_val, max_idx = torch.max(heatmap.view(-1), dim=0)
             
             ## why y uses // and x uses %?
             y_px = max_idx // W
@@ -42,5 +42,8 @@ def extract_keypoints(heatmaps):
             
             keypoints[b, 2*k] = x
             keypoints[b, 2*k+1] = y
+            max_values.append(max_val)
 
+    if return_max_values:
+        return keypoints, max_values
     return keypoints
