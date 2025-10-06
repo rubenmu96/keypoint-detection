@@ -3,4 +3,9 @@
 *.json
 dataset/tennis_court_det_dataset
 
+# Review gitignore
 sample_images/
+models/
+examples/
+debugg_.py
+test.ipynb

@@ -8,7 +8,6 @@ class ResNetHeatmap(nn.Module):
         ):
         # can i drop model size? use self.model.fc.in_features size instead?
         super().__init__()
-        # can just use weights=None instead if not wanting pre-trained model
         if pretrained:
             self.backbone = model(weights=weights)
         else:

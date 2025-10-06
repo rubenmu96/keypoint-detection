@@ -1,5 +1,3 @@
-import torch
-import inspect
 from src.models import (
     ResNetKeypoint,
     ResNetHeatmap,
@@ -10,6 +8,7 @@ from config import (
     HeatmapConfig,
     RCNNConfig,
 )
+import torch
 from torchvision import models
 # move some of the functions to processing/pre_processing.py and post_processing.py?
 # should add handling of low probability/thresholds
@@ -24,15 +23,16 @@ def keypoint_scaler(kps, width, height, scale=None):
     return kps
 
 def keypoint_unscaler(cfg, kps, orig_width, orig_height):
+    kps = kps.clone() if torch.is_tensor(kps) else kps.copy()
     if cfg.scale == (-1, 1):
         kps[::2] = (kps[::2] + 1) / 2
         kps[1::2] = (kps[1::2] + 1) / 2
     elif cfg.scale is None:
         kps[::2] = kps[::2] / cfg.width
         kps[1::2] = kps[1::2] / cfg.height
-
     kps[::2] = kps[::2] * orig_width
     kps[1::2] = kps[1::2] * orig_height
+    
     return kps
 
 def are_keypoints_valid(keypoints_list, max_width=1280, max_height=720, offset=10):
@@ -77,13 +77,13 @@ def update_cfg_from_args(cfg, args):
 
 model_dictionary = {
     "resnet18": {
-        "model": models.resnet18, "model_size": 512, "input_size": 512
+        "model": models.resnet18, "model_size": 512, "input_size": 512, "weights": "IMAGENET1K_V1"
     }, 
     "resnet34": {
-        "model": models.resnet34, "model_size": 512, "input_size": 512
+        "model": models.resnet34, "model_size": 512, "input_size": 512, "weights": "IMAGENET1K_V1"
     },
     "resnet50": {
-        "model": models.resnet50, "model_size": 2048, "input_size": 2048
+        "model": models.resnet50, "model_size": 2048, "input_size": 2048, "weights": "IMAGENET1K_V2"
     }
 }
 
@@ -94,8 +94,9 @@ def get_model_and_config(name="resnet", classes=None):
         cfg = ResNetConfig
         # check if possible to load something like **kwargs (cfg), then if they are different from default, use them instead?
         model = ResNetKeypoint(
-            model=cfg.model,
-            weights=cfg.weights,
+            model=model_dictionary[cfg.model]["model"],
+            weights=model_dictionary[cfg.model]["weights"],
+            input_size=model_dictionary[cfg.model]["input_size"],
             num_kps=cfg.num_kps,
             pretrained=cfg.pretrained
         )
@@ -103,7 +104,7 @@ def get_model_and_config(name="resnet", classes=None):
         cfg = HeatmapConfig
         model = ResNetHeatmap(
             model=model_dictionary[cfg.model]["model"],
-            weights=cfg.weights,
+            weights=model_dictionary[cfg.model]["weights"],
             num_kps=cfg.num_kps,
             model_size=model_dictionary[cfg.model]["model_size"],
             input_size=model_dictionary[cfg.model]["input_size"],
@@ -122,9 +123,17 @@ def load_model_inference(name, config):
     if name == "heatmap":
         model = ResNetHeatmap(
             model=model_dictionary[config.model]["model"],
-            weights=config.weights,
+            weights=model_dictionary[config.model]["weights"],
             num_kps=config.num_kps,
             model_size=model_dictionary[config.model]["model_size"],
             input_size=model_dictionary[config.model]["input_size"],
+        )
+    elif name == "resnet":
+        model = ResNetKeypoint(
+            model=model_dictionary[config.model]["model"],
+            weights=model_dictionary[config.model]["weights"],
+            input_size=model_dictionary[config.model]["input_size"],
+            num_kps=config.num_kps,
+            pretrained=config.pretrained
         )
     return model

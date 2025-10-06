@@ -7,8 +7,10 @@ from albumentations.pytorch.transforms import ToTensorV2
 import matplotlib.pyplot as plt
 import os
 
-class Trainer:
-    def __init__(self, cfg, model, optimizer, criterion, scheduler=None):
+class Trainer:  
+    def __init__(
+            self, cfg, model, optimizer, criterion, scheduler=None, scaler=torch.amp.GradScaler('cuda'), use_amp=True
+        ):
         self.cfg = cfg
         self.model = model
         self.optimizer = optimizer
@@ -16,6 +18,24 @@ class Trainer:
         self.scheduler = scheduler
         self.device = cfg.device
         self.model_name = cfg.model_name
+        self.scaler = scaler
+        self.use_amp = use_amp
+
+    def save_model_fp16(self, model, path):
+        """Save model in FP16 format to reduce file size"""
+        # Create a copy of the model in half precision
+        model_fp16 = model.half() if self.device != 'cpu' else model
+        
+        # Save the FP16 model state dict
+        torch.save({
+            'model_state_dict': model_fp16.state_dict(),
+            'dtype': 'fp16' if self.device != 'cpu' else 'fp32',
+            'model_name': self.model_name
+        }, path)
+        
+        # Convert back to original precision for continued training
+        if self.device != 'cpu':
+            model.float()
     
     def _train(self, train_data):
         total_loss = 0
@@ -23,25 +43,27 @@ class Trainer:
         
         self.model.train()
         for img, kps in train_data:
-            img = img.to(self.device)
+            img = img.to(self.device, non_blocking=True)
 
             self.optimizer.zero_grad()
-            if self.model_name == "KeypointRCNN":
-                kps = [{k: v.to(self.cfg.device) for k, v in t.items()} for t in kps]
-                outputs = self.model(img, kps)
-                loss = sum(loss for loss in outputs.values())
-            else:
-                kps = kps.to(self.device)
-                outputs = self.model(img)
-                loss = compute_loss(
-                    self.cfg, self.criterion, outputs, kps
-                )
-
-            total_loss += loss.item()
-
-            loss.backward()
-            self.optimizer.step()
+            with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
+                if self.model_name == "KeypointRCNN":
+                    kps = [{k: v.to(self.cfg.device) for k, v in t.items()} for t in kps]
+                    outputs = self.model(img, kps)
+                    loss = sum(loss for loss in outputs.values())
+                else:
+                    kps = kps.to(self.device)
+                    outputs = self.model(img)
+                    loss = compute_loss(
+                        self.cfg, self.criterion, outputs, kps
+                    )
+            
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            
             num_batches += 1
+            total_loss += loss.item()
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -62,7 +84,8 @@ class Trainer:
                 kps = kps.to(self.device)
             
             with torch.no_grad():
-                outputs = self.model(img)
+                with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
+                    outputs = self.model(img)
 
             loss = compute_loss(self.cfg, self.criterion, outputs, kps)
 
@@ -75,7 +98,8 @@ class Trainer:
             raise ValueError("Patience must be a positive integer.")
         
         if current_loss < best_loss:
-            torch.save(self.model.state_dict(), self.cfg.save_path)
+            # Use the new FP16 save method
+            self.save_model_fp16(self.model, self.cfg.save_path)
 
             if self.cfg.reset: es = 0
             best_loss = current_loss
@@ -90,6 +114,9 @@ class Trainer:
             os.makedirs(folder_path)
 
         def draw_keypoints(image, keypoints):
+            if keypoints.ndim == 2:
+                keypoints = keypoints.flatten()
+
             image = image.copy()
             for i in range(0, len(keypoints), 2):
                 x = int(keypoints[i])
@@ -113,7 +140,8 @@ class Trainer:
 
         model.eval()
         with torch.no_grad():
-            outputs = model(image_tensor)
+            with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
+                outputs = model(image_tensor)
 
         if cfg.model_name == "ResNetHeatmap":
             outputs = extract_keypoints(outputs)

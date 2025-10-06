@@ -1,12 +1,13 @@
 from src.utils import create_heatmap
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 
 loss_dictionary = {
     "bcelogitloss": torch.nn.BCEWithLogitsLoss(),
     "mseloss": torch.nn.MSELoss(),
     "smoothl1loss": torch.nn.SmoothL1Loss()
 }
+
 
 def _calculate_keypoint_mse(pred_kps, target_kps, criterion=None):
     # Also use num_kps as argument instead of 14? or -1 if it works?
@@ -25,26 +26,16 @@ def _calculate_keypoint_mse(pred_kps, target_kps, criterion=None):
     mse = F.mse_loss(stacked_preds[..., :2], stacked_targets[..., :2])
     return mse
 
-# def compute_loss(cfg, criterion, preds, targets):
-#     if cfg.model_name == "ResNetHeatmap":
-#         target_heatmap = create_heatmap(
-#             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
-#         )
-#         return criterion(preds, target_heatmap)
-#     elif cfg.model_name == "KeypointRCNN": # only during evaluation
-#         return _calculate_keypoint_mse(preds, targets, criterion)
-#     else:
-#         return criterion(preds, targets)
 
-def compute_loss(cfg, criterion, preds, targets):
+def compute_loss(cfg, criterion, preds, targets, pred_conf=None, target_conf=None):
     criterion = loss_dictionary[criterion]
     if cfg.model_name == "ResNetHeatmap":
         targets = create_heatmap(
             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
         )
-    elif cfg.model_name == "KeypointRCNN": # only during evaluation
+        return criterion(preds, targets)
+    elif cfg.model_name == "KeypointRCNN":
         loss = _calculate_keypoint_mse(preds, targets, criterion)
         return loss
-    
-    loss = criterion(preds, targets)
-    return loss
+    elif cfg.model_name == "ResNetKeypoint":
+        return criterion(preds, targets)

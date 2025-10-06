@@ -8,16 +8,14 @@ class BaseConfig:
     valid_json = path + "data_val.json"
     img_dir = path + "images"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    batch_size = 16
+    batch_size = 8 # 16 for resnet/heatmap, 
     epochs = 35
     patience = None
     learn_rate = 5e-4
     weight_decay = 1e-4
     warmup_ratio = 0.15
     reset = True
-
     train_aug = None
-    pretrained = True
 
     # For testing model on images during training
     display_examples = True
