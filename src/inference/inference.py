@@ -30,7 +30,7 @@ def overlapping_kps(keypoints, max_values, pixel_distance):
                 remove.append(row)
         return remove
 
-    if keypoints.ndim == 1:
+    if keypoints.ndim == 1 or keypoints.shape[1] != 2:
         keypoints = keypoints.reshape(-1, 2)
     
     keypoints_copy = keypoints.copy()
@@ -66,7 +66,7 @@ def overlapping_kps(keypoints, max_values, pixel_distance):
 
 def filter_low_probabilities(keypoints, max_values, threshold):
     """Remove keypoints (set to (-1, -1)) if confidence is below threshold"""
-    if keypoints.ndim == 1:
+    if keypoints.ndim == 1 or keypoints.shape[1] != 2:
         keypoints = keypoints.reshape(-1, 2)
     
     keypoints_copy = keypoints.copy()
@@ -85,7 +85,7 @@ def filter_low_probabilities(keypoints, max_values, threshold):
 def num_kps_req(keypoints, num_kps=7):
     """Remove all keypoints if the number of valid keypoints is less than required"""
     # TODO: need some rework, maybe require that both center keypoints and certain amount of keypoints should be present
-    if keypoints.ndim == 1:
+    if keypoints.ndim == 1 or keypoints.shape[1] != 2:
         keypoints = keypoints.reshape(-1, 2)
     
     valid_kps = np.sum(np.all(keypoints != -1, axis=1))

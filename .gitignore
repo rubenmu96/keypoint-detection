@@ -2,6 +2,7 @@
 *.pth
 *.json
 dataset/tennis_court_det_dataset
+*.mp4
 
 # Review gitignore
 sample_images/

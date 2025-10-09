@@ -21,22 +21,61 @@ class Trainer:
         self.scaler = scaler
         self.use_amp = use_amp
 
-    def save_model_fp16(self, model, path):
-        """Save model in FP16 format to reduce file size"""
-        # Create a copy of the model in half precision
-        model_fp16 = model.half() if self.device != 'cpu' else model
+    # def save_model_fp16(self, model, path):
+    #     """Save model in FP16 format to reduce file size"""
+    #     # Create a copy of the model in half precision
         
-        # Save the FP16 model state dict
+    #     model_fp16 = model.half() if self.device != 'cpu' else model
+        
+    #     # Save the FP16 model state dict
+    #     torch.save({
+    #         'model_state_dict': model_fp16.state_dict(),
+    #         'dtype': 'fp16' if self.device != 'cpu' else 'fp32',
+    #         'model_name': self.model_name
+    #     }, path)
+        
+    #     # Convert back to original precision for continued training
+    #     if self.device != 'cpu':
+    #         model.float()
+
+    def save_model_fp32(self, model, path):
+        """Save model in FP32 format"""
         torch.save({
-            'model_state_dict': model_fp16.state_dict(),
-            'dtype': 'fp16' if self.device != 'cpu' else 'fp32',
+            'model_state_dict': model.state_dict(),
+            'dtype': 'fp32',
             'model_name': self.model_name
         }, path)
+
+
+    def save_model_fp16(self, model, path):
+        """Save model in FP16 format to reduce file size"""
+        try:
+            model_fp16 = model.half() if self.device != 'cpu' else model
+            
+            torch.save({
+                'model_state_dict': model_fp16.state_dict(),
+                'dtype': 'fp16' if self.device != 'cpu' else 'fp32',
+                'model_name': self.model_name
+            }, path)
+        finally:
+            if self.device != 'cpu':
+                model.float()
+
+
+    def save_model(self, model, base_path):
+        """Save model in both FP32 and FP16 formats"""
+        base, ext = os.path.splitext(base_path)
+        if not ext:
+            ext = '.pth'
+
+        fp32_path = f"{base}_fp32{ext}"
+        fp16_path = f"{base}_fp16{ext}"
         
-        # Convert back to original precision for continued training
-        if self.device != 'cpu':
-            model.float()
+        self.save_model_fp32(model, fp32_path)
+        if self.use_amp:
+            self.save_model_fp16(model, fp16_path)
     
+
     def _train(self, train_data):
         total_loss = 0
         num_batches = 0
@@ -99,7 +138,8 @@ class Trainer:
         
         if current_loss < best_loss:
             # Use the new FP16 save method
-            self.save_model_fp16(self.model, self.cfg.save_path)
+            # self.save_model_fp16(self.model, self.cfg.save_path)
+            self.save_model(self.model, self.cfg.save_path)
 
             if self.cfg.reset: es = 0
             best_loss = current_loss
@@ -183,4 +223,3 @@ class Trainer:
             }
             epoch_metrics.append(metrics)
         return epoch_metrics
-    

@@ -1,13 +1,14 @@
-from torch.utils.data import DataLoader
-from src.utils import get_model_and_config, update_cfg_from_args
-from src.core import KeypointData, CollateFunction
-from src.trainer import Trainer
-from config import BaseConfig, config_to_dict
 import torch
+from torch.utils.data import DataLoader
 import transformers
 import math 
 import argparse
 import json
+
+from src.utils import get_model_and_config, update_cfg_from_args
+from src.core import KeypointData, CollateFunction
+from src.trainer import Trainer
+from config import BaseConfig, config_to_dict
 
 def main(args, use_amp):
     model, cfg = get_model_and_config(args.name)
@@ -54,13 +55,26 @@ def main(args, use_amp):
         scheduler=scheduler,
         use_amp=use_amp
     )
-    train.train(train_loader, valid_loader)
+    history = train.train(train_loader, valid_loader)
+
+    # save history
 
 
 if __name__ == "__main__":
     """
-    Train using fp16: python --name "heatmap"
-    Train using fp32: python --name "heatmap" --fp32
+    Train using fp16: python main.py --name "heatmap"
+    Train using fp32: python main.py --name "heatmap" --fp32
+
+    MODELS TO TRAIN:
+    python main.py --name "heatmap" (resnet34)
+    python main.py --name "heatmap" --fp32 (resnet34)
+    python main.py --name "heatmap" (resnet50)
+    python main.py --name "heatmap" --fp32 (resnet50)
+
+    python main.py --name "resnet" (resnet34)
+    python main.py --name "resnet" --fp32 (resnet34)
+
+    python main.py --name "heatmap" (resnet34, image size 224x224)
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name

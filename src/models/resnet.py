@@ -11,14 +11,14 @@ class ResNetKeypoint(nn.Module):
             self.model = model(weights=None)
         # self.model.fc = torch.nn.Linear(input_size, num_kps*2) # 14 keypoints with (x, y)
 
-        self.model.fc = nn.Identity()
+        # self.model.fc = nn.Identity()
         self.backbone = nn.Sequential(*list(self.model.children())[:-2])
 
         self.regression_head = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(input_size, 512),
-            nn.BatchNorm1d(512),
+            nn.Linear(input_size, 256),
+            # nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Dropout(0.25),
             nn.Linear(256, num_kps * 2)
