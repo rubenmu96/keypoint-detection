@@ -30,7 +30,10 @@ def get_file_type(filename):
 def predictor(name, media, folder, use_amp=True):
     format = get_file_type(filename=media)
 
-    load_model = glob.glob(f"{folder}*.pth")[0]
+    if use_amp:
+        load_model = glob.glob(f"{folder}*_fp16.pth")[0]
+    else:
+        load_model = glob.glob(f"{folder}*_fp32.pth")[0]
     cfg_path = glob.glob(f"{folder}*.json")[0]
 
     with open(cfg_path, 'r') as f:

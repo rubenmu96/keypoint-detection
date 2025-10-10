@@ -10,7 +10,6 @@ from albumentations.pytorch.transforms import ToTensorV2
 from src.utils import keypoint_unscaler
 from src.utils import extract_keypoints
 
-### TODO: Move the heatmap post-processing to another .py
 def overlapping_kps(keypoints, max_values, pixel_distance):
     """
     Remove overlapping keypoints
@@ -172,6 +171,23 @@ def load_fp16_model(model, checkpoint_path, device):
         print("Loaded model from legacy format (FP32)")
     
     return model
+
+
+def summary_statistics(inference_times, frame_count, use_fp16):
+    avg_inference_time = np.mean(inference_times)
+    std_inference_time = np.std(inference_times)
+    median_inference_time = np.median(inference_times)
+    
+    print(f"\n{'='*50}")
+    print(f"Performance Statistics ({'FP16' if use_fp16 else 'FP32'})")
+    print(f"{'='*50}")
+    print(f"Processed frames: {frame_count}")
+    print(f"Average inference time: {avg_inference_time*1000:.2f}ms ± {std_inference_time*1000:.2f}ms")
+    print(f"Median inference time: {median_inference_time*1000:.2f}ms")
+    print(f"Average inference FPS: {1/avg_inference_time:.2f}")
+    print(f"Min inference time: {min(inference_times)*1000:.2f}ms")
+    print(f"Max inference time: {max(inference_times)*1000:.2f}ms")
+    print(f"{'='*50}")
 
 
 class ImagePredictor:
@@ -356,7 +372,7 @@ class VideoPredictor:
 
         return keypoints
 
-    def predict_video(self, detector, video_path, output_path):
+    def predict_video(self, detector, video_path, output_path, limit_fps=False):
         cap = cv2.VideoCapture(video_path)
         
         original_fps = cap.get(cv2.CAP_PROP_FPS)
@@ -367,14 +383,15 @@ class VideoPredictor:
         writer = cv2.VideoWriter(
             output_path, fourcc, original_fps, (width, height)
         )
+
+        target_frame_time = 1.0 / original_fps
         
         # Warm up GPU with proper dtype
-        dummy_frame = np.zeros((height, width, 3), dtype=np.uint8)
-        print("Warming up GPU...")
-        for _ in range(10):  # More warmup iterations
-            detector.predict_frame(dummy_frame)
-
         if self.cfg.device == "cuda":
+            dummy_frame = np.zeros((height, width, 3), dtype=np.uint8)
+            print("Warming up GPU...")
+            for _ in range(10):  # More warmup iterations
+                detector.predict_frame(dummy_frame)
             torch.cuda.synchronize()  # Ensure GPU warmup is complete
         
         frame_count = 0
@@ -382,11 +399,14 @@ class VideoPredictor:
         prev_time = time.time()
 
         print(f"Starting video processing with {'FP16' if self.use_fp16 else 'FP32'}...")
-        
+        print(f"Target FPS: {original_fps:.2f} (Frame time: {target_frame_time*1000:.2f}ms)")
+
         # Process frames in batches for better benchmarking
         inference_times = []
         
         while True:
+            frame_start_time = time.time()
+
             ret, frame = cap.read()
             if not ret:
                 break
@@ -398,7 +418,7 @@ class VideoPredictor:
             if self.cfg.device == "cuda": torch.cuda.synchronize()
             inference_start = time.time()
             keypoints = detector.predict_frame(frame_rgb)
-            if self.cfg.device == "cuda": torch.cuda.synchronize()  # Wait for GPU to finish
+            if self.cfg.device == "cuda": torch.cuda.synchronize()
             inference_end = time.time()
             
             inference_time = inference_end - inference_start
@@ -424,24 +444,16 @@ class VideoPredictor:
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
+            # make sure pipeline is not faster than video
+            # maybe make an if statement
+            if limit_fps:
+                frame_elapsed_time = time.time() - frame_start_time
+                if frame_elapsed_time < target_frame_time:
+                    time.sleep(target_frame_time - frame_elapsed_time)
+
         cap.release()
         writer.release()
         cv2.destroyAllWindows()
         
-        # create as function instead? only need frame_count, inference_times and if use_fp16?
-        # Print detailed statistics
         if inference_times:
-            avg_inference_time = np.mean(inference_times)
-            std_inference_time = np.std(inference_times)
-            median_inference_time = np.median(inference_times)
-            
-            print(f"\n{'='*50}")
-            print(f"Performance Statistics ({'FP16' if self.use_fp16 else 'FP32'})")
-            print(f"{'='*50}")
-            print(f"Processed frames: {frame_count}")
-            print(f"Average inference time: {avg_inference_time*1000:.2f}ms ± {std_inference_time*1000:.2f}ms")
-            print(f"Median inference time: {median_inference_time*1000:.2f}ms")
-            print(f"Average inference FPS: {1/avg_inference_time:.2f}")
-            print(f"Min inference time: {min(inference_times)*1000:.2f}ms")
-            print(f"Max inference time: {max(inference_times)*1000:.2f}ms")
-            print(f"{'='*50}")
+            summary_statistics(inference_times, frame_count, self.use_fp16)
