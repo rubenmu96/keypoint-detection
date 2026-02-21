@@ -34,7 +34,7 @@ class ResNetHeatmap(nn.Module):
             self.model_size, self.model_size, kernel_size=3, stride=1, dilation=2, padding=2
         )
         return nn.Sequential(*layers)
-
+    
     def forward(self, x):
         x = self.backbone.conv1(x)
         x = self.backbone.bn1(x)

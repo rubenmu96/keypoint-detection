@@ -57,9 +57,10 @@ class KeypointPyTorch(Dataset):
     def __getitem__(self, idx):
         item = self.data.iloc[idx]
         image_path = f"{self.img_dir}/{item['id']}.png"
-        image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        image = cv2.imread(image_path)
         if image is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
         h, w, _ = image.shape
 
@@ -199,10 +200,11 @@ class CollateFunction:
         images = [item[0] for item in batch]
         keypoints = [item[1] for item in batch]
         images = torch.stack(images)
-    
-        max_length = max(len(kps) for kps in keypoints)
-        padded_keypoints = [torch.cat([kps, torch.zeros(max_length - len(kps))]) for kps in keypoints]
-        keypoints = torch.stack(padded_keypoints)
+
+        # TODO: try without padding
+        # max_length = max(len(kps) for kps in keypoints)
+        # padded_keypoints = [torch.cat([kps, torch.zeros(max_length - len(kps))]) for kps in keypoints]
+        # keypoints = torch.stack(padded_keypoints)
         return images, keypoints
 
     def __call__(self, batch):

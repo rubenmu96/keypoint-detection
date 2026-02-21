@@ -25,9 +25,8 @@ def get_model_and_config(name="resnet", classes=None):
     name = name.lower()
 
     valid_models = ["resnet", "heatmap", "rcnn"]
-    assert name in valid_models, print(
-        f"name should be one of: {valid_models}"
-    )
+    if name not in valid_models:
+        raise ValueError(f"name should be one of: {valid_models}, got '{name}'")
     
     if name == "resnet":
         cfg = ResNetConfig
@@ -56,9 +55,8 @@ def get_model_and_config(name="resnet", classes=None):
 
 def load_model_inference(name, config):
     valid_models = ["resnet", "heatmap", "rcnn"]
-    assert name in valid_models, print(
-        f"name should either be {valid_models}"
-    )
+    if name not in valid_models:
+        raise ValueError(f"name should be one of: {valid_models}, got '{name}'")
     
     if name == "heatmap":
         model = ResNetHeatmap(
@@ -75,7 +73,7 @@ def load_model_inference(name, config):
             num_kps=config.num_kps,
             pretrained=config.pretrained
         )
-    elif "rcnn":
+    elif name=="rcnn":
         model = KeypointRCNN(config.num_kps)
 
     return model

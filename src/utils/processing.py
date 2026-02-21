@@ -40,6 +40,8 @@ def keypoint_unscaler(cfg, kps, orig_width, orig_height):
         elif cfg.scale is None:
             kps[..., 0] = kps[..., 0] / cfg.width
             kps[..., 1] = kps[..., 1] / cfg.height
+        elif cfg.scale == (0, 1):
+            pass
         kps[..., 0] = kps[..., 0] * orig_width
         kps[..., 1] = kps[..., 1] * orig_height
     
@@ -51,6 +53,8 @@ def keypoint_unscaler(cfg, kps, orig_width, orig_height):
         elif cfg.scale is None:
             kps[::2] = kps[::2] / cfg.width
             kps[1::2] = kps[1::2] / cfg.height
+        elif cfg.scale == (0, 1):
+            pass
         kps[::2] = kps[::2] * orig_width
         kps[1::2] = kps[1::2] * orig_height
     

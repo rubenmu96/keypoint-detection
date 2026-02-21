@@ -13,8 +13,6 @@ from src.utils import (
 )
 
 def predictor(args, name, media, folder, use_amp=True):
-    format = get_file_type(filename=media)
-
     cfg_path = glob.glob(f"{folder}*.json")[0]
 
     with open(cfg_path, 'r') as f:

@@ -2,7 +2,6 @@ import os
 import torch
 from torch.utils.data import DataLoader
 import transformers
-import math 
 import argparse
 import json
 
@@ -43,7 +42,6 @@ def main(args, use_amp):
     valid_loader = DataLoader(
         dataset=valid_data,
         batch_size=cfg.batch_size,
-        shuffle=True,
         collate_fn=collate_fn,
         pin_memory=True,
         num_workers=args.num_workers,
@@ -55,7 +53,7 @@ def main(args, use_amp):
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay
     )
-    num_train_steps = train_loader * cfg.epochs
+    num_train_steps = len(train_loader) * cfg.epochs
     scheduler = transformers.get_cosine_schedule_with_warmup(
         optimizer=optimizer,
         num_warmup_steps=int(num_train_steps * cfg.warmup_ratio),
@@ -64,11 +62,7 @@ def main(args, use_amp):
 
     config_dict = config_to_dict(cfg)
     
-    try:
-        os.mkdir(cfg.folder)
-    except FileExistsError:
-        print("Folder already exists.")
-
+    os.makedirs(cfg.folder, exist_ok=True)
     with open(f'{cfg.folder}/{args.name}_config.json', 'w') as f:
         json.dump(config_dict, f, indent=4)
 

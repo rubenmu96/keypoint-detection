@@ -45,9 +45,9 @@ class KeypointPredictor:
         if self.use_onnx:
             try:
                 self._init_onnx(onnx_path)
-            except:
-                print("Onnx model could not be found. Loading PyTorch model instead.")
-                self.use_onnx = None
+            except Exception as e:
+                print(f"ONNX model failed to load ({e}). Falling back to PyTorch.")
+                self.use_onnx = False
                 self._init_pytorch(model, load_model, use_fp16)
         else:
             self._init_pytorch(model, load_model, use_fp16)
@@ -234,6 +234,8 @@ class KeypointPredictor:
     
     # ==================== Visualization ====================
     
+    # TODO: combine these functions
+
     def draw_keypoints(self, image, keypoints, save_path=None, show=True):
         """Draw keypoints on image."""
         if keypoints.ndim == 2:

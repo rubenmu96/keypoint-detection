@@ -178,6 +178,47 @@ def compute_mpjpe(
         "std": distances.std().item(),
     }
 
+# def compute_accuracy(cfg, preds, targets, image_size=None):
+#     if cfg.model_name == "ResNetHeatmap":
+#         preds = extract_keypoints(preds)
+
+#     elif cfg.model_name == "KeypointRCNN":
+#         pred_coords = []
+#         target_coords = []
+        
+#         for pred_dict, target_dict in zip(preds, targets):
+#             if pred_dict["keypoints"].shape[0] > 0:
+#                 pred_coords.append(pred_dict["keypoints"][0, :, :2])
+#                 target_coords.append(target_dict["keypoints"][0, :, :2])
+        
+#         if not pred_coords:
+#             return {"pck": 0.0, "mpjpe": float('inf')}
+        
+#         preds = torch.stack(pred_coords)
+#         targets = torch.stack(target_coords)
+
+#     if image_size is None:
+#         image_size = (cfg.height, cfg.width)
+    
+#     h, w = image_size
+
+#     preds = keypoint_unscaler(
+#         cfg, preds, orig_width=w, orig_height=h
+#     )
+#     targets = keypoint_unscaler(
+#         cfg, targets, orig_width=w, orig_height=h
+#     )
+
+#     # Compute metrics
+#     pck_results = compute_pck(preds, targets, threshold=0.05, image_size=image_size)
+#     mpjpe_results = compute_mpjpe(preds, targets)
+    
+#     return {
+#         "pck@0.05": pck_results["pck"],
+#         "pck@0.1": compute_pck(preds, targets, threshold=0.1, image_size=image_size)["pck"],
+#         "mpjpe": mpjpe_results["mpjpe"],
+#     }
+
 def compute_accuracy(cfg, preds, targets, image_size=None):
     if cfg.model_name == "ResNetHeatmap":
         preds = extract_keypoints(preds)
@@ -202,14 +243,11 @@ def compute_accuracy(cfg, preds, targets, image_size=None):
     
     h, w = image_size
 
-    preds = keypoint_unscaler(
-        cfg, preds, orig_width=w, orig_height=h
-    )
-    targets = keypoint_unscaler(
-        cfg, targets, orig_width=w, orig_height=h
-    )
+    # RCNN coords are already in pixel space — skip unscaling
+    if cfg.model_name != "KeypointRCNN":
+        preds = keypoint_unscaler(cfg, preds, orig_width=w, orig_height=h)
+        targets = keypoint_unscaler(cfg, targets, orig_width=w, orig_height=h)
 
-    # Compute metrics
     pck_results = compute_pck(preds, targets, threshold=0.05, image_size=image_size)
     mpjpe_results = compute_mpjpe(preds, targets)
     

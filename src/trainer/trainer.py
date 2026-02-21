@@ -190,7 +190,7 @@ class Trainer:
         times["total_time"] = sum(times.values())
 
         tracking = {
-            "valid_loss": avg_loss,
+            "loss": avg_loss,
             "pck@0.05": avg_pck,
             "mpjpe": avg_mpjpe
         }

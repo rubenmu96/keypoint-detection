@@ -73,7 +73,7 @@ class VideoProcessor:
         self.extract_video_segment(input_path, output_path, 0, max_duration)
 
     def __call__(self):
-        if validators.url(self.video_patn):
+        if validators.url(self.video_path):
             input_path = self.get_yt_video(self.video_path, self.folder, self.video_name)
         else:
             input_path = self.video_path
