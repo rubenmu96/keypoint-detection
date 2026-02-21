@@ -43,7 +43,7 @@ class BaseConfig:
     display_names = ["clay", "fed", "synframe", "synthetic"] # optional 
     images = (
         glob.glob(os.path.join("dataset/sample_images/", '*.jpg')) + 
-        glob.glob(os.path.join("dataset/sample_images/", '*.ppg'))
+        glob.glob(os.path.join("dataset/sample_images/", '*.png'))
     )
     sample_image_path = images[:4] # limit to first 4 images
 

@@ -205,6 +205,8 @@ class CollateFunction:
         # max_length = max(len(kps) for kps in keypoints)
         # padded_keypoints = [torch.cat([kps, torch.zeros(max_length - len(kps))]) for kps in keypoints]
         # keypoints = torch.stack(padded_keypoints)
+        
+        keypoints = torch.stack(keypoints)
         return images, keypoints
 
     def __call__(self, batch):

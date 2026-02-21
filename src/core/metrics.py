@@ -23,51 +23,64 @@ def _calculate_keypoint_loss(
 ):
     """
     Calculate keypoint loss with proper visibility masking and multi-object support.
-    
+
+    Called in two distinct contexts:
+
+    * Training — ``pred_kps`` is the loss dict returned by torchvision KeypointRCNN
+      when targets are supplied. This function is NOT called in that path; the
+      training branch in ``_train`` sums the dict values directly.
+    * Validation — ``pred_kps`` is a list of prediction dicts produced by
+      KeypointRCNN in eval mode, each with shape ``[N_pred, K, 3]`` in pixel
+      coords. ``target_kps`` is the corresponding list of dataset target dicts,
+      each with ``"keypoints"`` of shape ``[1, K, 3]`` also in pixel coords.
+      Pairing the highest-scoring prediction (index 0 after torchvision's
+      score-sorted output) against the single ground-truth instance is correct
+      for single-instance datasets.
+
     Args:
-        pred_kps: List of prediction dicts with 'keypoints' tensor of shape [N, K, 3]
-        target_kps: List of target dicts with 'keypoints' tensor of shape [M, K, 3]
-        criterion: Loss function to use
+        pred_kps: List of prediction dicts with 'keypoints' tensor of shape [N_pred, K, 3]
+        target_kps: List of target dicts with 'keypoints' tensor of shape [N_target, K, 3]
+        criterion: Loss function to use (used only when use_visibility_mask=False)
         num_kps: Number of keypoints
         use_visibility_mask: Whether to mask loss by visibility flags
         visibility_threshold: Minimum visibility value to include in loss
-    
+
     Returns:
-        Computed loss value
+        Mean loss over all images that had at least one valid detection.
+        Returns 0.0 with a warning when every image in the batch had zero detections.
     """
     device = pred_kps[0]["keypoints"].device if pred_kps[0]["keypoints"].numel() > 0 else "cpu"
-    
+
     total_loss = torch.tensor(0.0, device=device)
     valid_count = 0
-    
+
     for pred_dict, target_dict in zip(pred_kps, target_kps):
-        pred = pred_dict["keypoints"]  # [N_pred, K, 3]
+        pred = pred_dict["keypoints"]    # [N_pred, K, 3]
         target = target_dict["keypoints"]  # [N_target, K, 3]
-        
-        # Skip if either is empty
+
+        # Skip images where the model made no detections.
         if pred.shape[0] == 0 or target.shape[0] == 0:
             continue
-        
-        # Match predictions to targets (simple: use min of both counts)
-        # For better matching, consider using Hungarian algorithm with IoU
+
+        # Pair each ground-truth instance with the best-matching prediction.
+        # torchvision returns predictions sorted by descending score, so index 0
+        # is the highest-confidence detection — the right choice for the
+        # single-instance case.  For multi-instance datasets a proper assignment
+        # algorithm (e.g. Hungarian matching on IoU) would be needed here.
         num_objects = min(pred.shape[0], target.shape[0])
-        
-        pred_coords = pred[:num_objects, :, :2]  # [N, K, 2]
-        target_coords = target[:num_objects, :, :2]  # [N, K, 2]
-        target_visibility = target[:num_objects, :, 2]  # [N, K]
-        
+
+        pred_coords = pred[:num_objects, :, :2].float()    # [N, K, 2]
+        target_coords = target[:num_objects, :, :2].float()  # [N, K, 2]
+        target_visibility = target[:num_objects, :, 2]     # [N, K]
+
         if use_visibility_mask:
-            # Create mask for valid keypoints (visibility > threshold)
             visibility_mask = (target_visibility > visibility_threshold).float()  # [N, K]
-            
-            # Compute per-keypoint loss
+
             per_kp_loss = F.mse_loss(pred_coords, target_coords, reduction='none')  # [N, K, 2]
             per_kp_loss = per_kp_loss.mean(dim=-1)  # [N, K]
-            
-            # Apply visibility mask
+
             masked_loss = per_kp_loss * visibility_mask
-            
-            # Normalize by number of valid keypoints
+
             num_valid = visibility_mask.sum()
             if num_valid > 0:
                 total_loss += masked_loss.sum() / num_valid
@@ -75,8 +88,20 @@ def _calculate_keypoint_loss(
         else:
             total_loss += criterion(pred_coords, target_coords)
             valid_count += 1
-    
+
+    if valid_count == 0:
+        # Every image in this batch had zero detections.  Returning 0.0 would
+        # make the loss look perfect; instead warn so the caller can decide.
+        import warnings
+        warnings.warn(
+            "KeypointRCNN: no valid detections in this batch — loss is 0.0 "
+            "and does not reflect model quality.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
     return total_loss / max(valid_count, 1)
+
 
 def compute_loss(cfg, criterion, preds, targets):
     if cfg.model_name == "ResNetHeatmap":

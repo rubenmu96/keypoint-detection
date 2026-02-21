@@ -124,7 +124,7 @@ class Trainer:
         times["total_time"] = sum(times.values())
 
         tracking = {
-            "loss": total_loss / num_batches,
+            "loss": total_loss / num_batches if num_batches > 0 else 0.0,
         }
         tracking.update(times)
         
@@ -159,6 +159,10 @@ class Trainer:
             
             start = time.time()
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
+                # KeypointRCNN must NOT receive targets in eval mode — it returns
+                # prediction dicts instead of a loss dict when targets are absent.
+                # For all other models, targets are not part of the forward pass.
+                assert not self.model.training, "_evaluate called with model in train mode"
                 outputs = self.model(img)
             times['forward'] += time.time() - start
             
@@ -378,6 +382,6 @@ def testing(cfg, model, epoch, use_amp):
 
         file_type = get_file_type(img_pth)
         if file_type == "image":
-            vis_testing(cfg, model, img_pth, epoch + 1, name, use_amp)
+            vis_testing(cfg, model, img_pth, epoch, name, use_amp)
         else:
             continue
