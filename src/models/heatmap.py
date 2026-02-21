@@ -3,16 +3,15 @@ import torch.nn as nn
 
 class ResNetHeatmap(nn.Module):
     def __init__(
-            self, model=models.resnet34, weights="IMAGENET1K_V1", num_kps=14,
-            input_size=512, model_size=512, pretrained=True
+            self, model=models.resnet34, weights="IMAGENET1K_V1", 
+            num_kps=14, input_size=512, pretrained=True
         ):
-        # can i drop model size? use self.model.fc.in_features size instead?
         super().__init__()
         if pretrained:
             self.backbone = model(weights=weights)
         else:
             self.backbone = model(weights=None)
-        self.model_size = model_size
+        self.model_size = self.backbone.fc.in_features
 
         self.backbone.avgpool = nn.Identity()
         self.backbone.fc = nn.Identity()

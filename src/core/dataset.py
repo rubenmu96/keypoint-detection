@@ -6,7 +6,7 @@ from albumentations.pytorch.transforms import ToTensorV2
 from src.utils import (
     are_keypoints_valid,
     keypoints_with_visibility,
-    keypoints_to_bbox,
+    keypoints_region,
     keypoint_scaler
 )
 import cv2
@@ -20,8 +20,12 @@ class KeypointPyTorch(Dataset):
         self.width = cfg.width
         self.height = cfg.height
         self.scale = cfg.scale
-        self.cfg = cfg
 
+        self.model_name = cfg.model_name
+
+        # TODO: convert to numpy here instead
+
+        # TODO: make separate functions for augmentations?
         p = 0.4 # add to cfg
         if transform:
             self.transform = A.Compose([
@@ -69,9 +73,9 @@ class KeypointPyTorch(Dataset):
 
         keypoints = self.clip_kps(keypoints, width=self.width, height=self.height)
 
-        if self.cfg.model_name == "KeypointRCNN":
+        if self.model_name == "KeypointRCNN":
             keypoints_tensor = keypoints_with_visibility(keypoints)
-            bbox = keypoints_to_bbox(
+            bbox = keypoints_region(
                 keypoints, 
                 offset=10,
                 width=self.width, 
@@ -96,33 +100,61 @@ class KeypointData:
         self.cfg = cfg
         self.clean = clean
 
-    def clean_keypoints(self, df, img_path):
-        def get_shape(path):
-            image = cv2.imread(path + ".png")
-            if image is None:
-                return (None, None)
-            return image.shape[:2]
+    # def clean_keypoints(self, df, img_path):
+    #     def get_shape(path):
+    #         image = cv2.imread(path + ".png")
+    #         if image is None:
+    #             return (None, None)
+    #         return image.shape[:2]
         
-        def kps_outside(coords, height=720, width=1280):
-            is_outside = False
-            x = [x[0] for x in coords]
-            y = [y[1] for y in coords]
+    #     def kps_outside(coords, height=720, width=1280):
+    #         is_outside = False
+    #         x = [x[0] for x in coords]
+    #         y = [y[1] for y in coords]
         
-            # combine np.min for x and y
-            if np.max(x) > width or np.min(x) < 0 or np.max(y) > height or np.min(y) < 0:
-                is_outside = True
-            return is_outside
+    #         # combine np.min for x and y
+    #         if np.max(x) > width or np.min(x) < 0 or np.max(y) > height or np.min(y) < 0:
+    #             is_outside = True
+    #         return is_outside
     
-        df["img_path"] = img_path + "/" + df["id"]
-        df[["height", "width"]] = pd.DataFrame(
-            df["img_path"].apply(get_shape).tolist(),
-            index=df.index
-        )
-        df["kps_outside"] = df.apply(
-            lambda x: kps_outside(x["kps"], x["height"], x["width"]), axis=1
-        )
-        new_df = df[df["kps_outside"] != True]
-        return new_df
+    #     df["img_path"] = img_path + "/" + df["id"]
+    #     df[["height", "width"]] = pd.DataFrame(
+    #         df["img_path"].apply(get_shape).tolist(),
+    #         index=df.index
+    #     )
+    #     df["kps_outside"] = df.apply(
+    #         lambda x: kps_outside(x["kps"], x["height"], x["width"]), axis=1
+    #     )
+    #     new_df = df[df["kps_outside"] != True]
+    #     return new_df
+    
+    def clean_keypoints(self, df, img_path):
+        import imagesize
+        
+        def get_shape(path):
+            try:
+                width, height = imagesize.get(path + ".png")
+                return height, width
+            except Exception:
+                return None, None
+        
+        def kps_outside(coords, height, width):
+            if height is None:
+                return True
+            coords = np.asarray(coords)
+            x, y = coords[:, 0], coords[:, 1]
+            return x.max() > width or x.min() < 0 or y.max() > height or y.min() < 0
+        
+        df = df.copy()
+        df["img_path"] = f"{img_path}/" + df["id"]
+        
+        # Unpack tuples directly into columns
+        df["height"], df["width"] = zip(*df["img_path"].map(get_shape))
+        
+        # Filter directly without storing intermediate column
+        mask = ~df.apply(lambda r: kps_outside(r["kps"], r["height"], r["width"]), axis=1)
+        
+        return df.loc[mask]
     
     def _get_data_rcnn(self):
         train_data = self.train_data[

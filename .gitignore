@@ -3,10 +3,13 @@
 *.json
 dataset/tennis_court_det_dataset
 *.mp4
+*.onnx
 
 # Review gitignore
-sample_images/
+test-images/
 models/
 examples/
-debugg_.py
+inf_speed_tester.py
 test.ipynb
+src/inference/inf_no_onnx.py
+src/inference/inference_autocast.py

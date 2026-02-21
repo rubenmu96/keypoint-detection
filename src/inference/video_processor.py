@@ -4,11 +4,10 @@ import validators
 
 class VideoProcessor:
     """Youtube and mp4 video processor"""
-    def __init__(self, input_path, video_name, output_path=None, folder=None, max_duration=None, start_time=None, end_time=None):
-        # TODO: improve names
-        self.input_path = input_path
+    def __init__(self, video_path, video_name, save_path=None, folder=None, max_duration=None, start_time=None, end_time=None):
+        self.video_path = video_path
         self.video_name = video_name
-        self.output_path = output_path if folder is None else f"{folder}{output_path}"
+        self.save_path = save_path if folder is None else f"{folder}{save_path}"
         self.folder = folder # make sure folder ends with "/"?
         self.max_duration = max_duration
         self.start_time = start_time
@@ -33,11 +32,11 @@ class VideoProcessor:
         else:
             return string
 
-    def get_yt_video(self, url, folder="examples/", name_of_video=None):
+    def get_yt_video(self, url, folder="examples/", video_name=None):
         youtube = YouTube(url)
         
-        if name_of_video is not None:
-            youtube.title = self._remove_mp4(name_of_video)
+        if video_name is not None:
+            youtube.title = self._remove_mp4(video_name)
         video = youtube.streams.get_highest_resolution()
         video.download(folder)
         return self._contains_mp4(f"{folder}{youtube.title}")
@@ -74,12 +73,12 @@ class VideoProcessor:
         self.extract_video_segment(input_path, output_path, 0, max_duration)
 
     def __call__(self):
-        if validators.url(self.input_path):
-            input_path = self.get_yt_video(self.input_path, self.folder, self.video_name)
+        if validators.url(self.video_patn):
+            input_path = self.get_yt_video(self.video_path, self.folder, self.video_name)
         else:
-            input_path = self.input_path
+            input_path = self.video_path
         
         if self.start_time is not None or self.end_time is not None:
-            self.extract_video_segment(input_path, self.output_path, self.start_time, self.end_time)
+            self.extract_video_segment(input_path, self.save_path, self.start_time, self.end_time)
         elif self.max_duration is not None:
-            self.shorten_video(input_path, self.output_path, self.max_duration)
+            self.shorten_video(input_path, self.save_path, self.max_duration)

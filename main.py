@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader
 import transformers
@@ -5,10 +6,17 @@ import math
 import argparse
 import json
 
-from src.utils import get_model_and_config, update_cfg_from_args
+from config import (
+    config_to_dict,
+    update_cfg_from_args
+)
+from src.utils import get_model_and_config
 from src.core import KeypointData, CollateFunction
-from src.trainer import Trainer
-from config import BaseConfig, config_to_dict
+from src.trainer import (
+    Trainer,
+    convert_onnx_fp16,
+    convert_onnx_fp32
+)
 
 def main(args, use_amp):
     model, cfg = get_model_and_config(args.name)
@@ -19,33 +27,52 @@ def main(args, use_amp):
     model = model.to(cfg.device)
     collate_fn = CollateFunction(cfg.model_name)
 
-    train_data, valid_data = KeypointData(cfg).get_data(cfg.model_name)
+    # Get keypoint dataset
+    train_data, valid_data = KeypointData(cfg, cfg.clean_dataset).get_data(cfg.model_name)
 
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=cfg.batch_size,
         shuffle=True,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
+        pin_memory=True,
+        num_workers=args.num_workers,
+        persistent_workers=True if args.num_workers > 0 else False,
+        prefetch_factor=2 if args.num_workers > 0 else None
     )
     valid_loader = DataLoader(
         dataset=valid_data,
         batch_size=cfg.batch_size,
         shuffle=True,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
+        pin_memory=True,
+        num_workers=args.num_workers,
+        persistent_workers=True if args.num_workers > 0 else False,
+        prefetch_factor=2 if args.num_workers > 0 else None
     )
+
+    # Optimizer and learning rate scheduler
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay
     )
-    num_train_steps = math.ceil(len(train_data) / cfg.batch_size) * cfg.epochs
+    num_train_steps = train_loader * cfg.epochs
     scheduler = transformers.get_cosine_schedule_with_warmup(
-        optimizer,
+        optimizer=optimizer,
         num_warmup_steps=int(num_train_steps * cfg.warmup_ratio),
         num_training_steps=num_train_steps
     )
 
     config_dict = config_to_dict(cfg)
-    with open(f'{args.name}_config.json', 'w') as f:
+    
+    try:
+        os.mkdir(cfg.folder)
+    except FileExistsError:
+        print("Folder already exists.")
+
+    with open(f'{cfg.folder}/{args.name}_config.json', 'w') as f:
         json.dump(config_dict, f, indent=4)
+
+    print("Config is saved")
 
     train = Trainer(
         cfg=cfg,
@@ -55,33 +82,29 @@ def main(args, use_amp):
         scheduler=scheduler,
         use_amp=use_amp
     )
+
     history = train.train(train_loader, valid_loader)
 
-    # save history
-
+    if cfg.onnx:
+        success = convert_onnx_fp32(folder=cfg.folder)
+        
+        if success and use_amp:
+            convert_onnx_fp16(cfg.folder)
 
 if __name__ == "__main__":
     """
-    Train using fp16: python main.py --name "heatmap"
-    Train using fp32: python main.py --name "heatmap" --fp32
+    Example usage:
+    Train using fp16: python main.py --name "heatmap" --num_workers 4
+    Train using fp32: python main.py --name "heatmap" --num_workers 4 --fp32
 
-    MODELS TO TRAIN:
-    python main.py --name "heatmap" (resnet34)
-    python main.py --name "heatmap" --fp32 (resnet34)
-    python main.py --name "heatmap" (resnet50)
-    python main.py --name "heatmap" --fp32 (resnet50)
+    Other parameters can be changed in the config (config/config.py and model_configs.py).
 
-    python main.py --name "resnet" (resnet34)
-    python main.py --name "resnet" --fp32 (resnet34)
-
-    python main.py --name "heatmap" (resnet34, image size 224x224)
+    Be careful with num_workers on Windows, num_workers > 0 might give unpredictable results or not work.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name
-    parser.add_argument('--batch_size', type=int, default=BaseConfig().batch_size, help='Batch size')
-    parser.add_argument('--learn_rate', type=float, default=BaseConfig().learn_rate, help='Learning rate')
-    parser.add_argument('--epochs', type=int, default=BaseConfig().epochs, help='Epochs')
-    parser.add_argument('--fp32', action='store_true', help="Use FP32 instead of FP16")
+    parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name?
+    parser.add_argument('--fp32', action="store_true", help="Use FP32 instead of FP16")
+    parser.add_argument('--num_workers', type=int, default=0, help="Number of workers")
     args = parser.parse_args()
 
     use_amp = not args.fp32
