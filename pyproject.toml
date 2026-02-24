@@ -28,6 +28,7 @@ torchvision = [
     { version = ">=0.22.0", markers = "sys_platform == 'linux'",  source = "torch_cpu" },
     { version = ">=0.22.0", markers = "sys_platform == 'darwin'" },
 ]
+pandas = "^3.0.1"
 
 [[tool.poetry.source]]
 name = "torch_cuda128"
