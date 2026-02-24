@@ -1,9 +1,19 @@
+import math
 import os
 import torch
+from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-import transformers
 import argparse
 import json
+
+
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps):
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+    return LambdaLR(optimizer, lr_lambda)
 
 from config import (
     config_to_dict,
@@ -54,7 +64,7 @@ def main(args, use_amp):
         model.parameters(), lr=cfg.learn_rate, weight_decay=cfg.weight_decay
     )
     num_train_steps = len(train_loader) * cfg.epochs
-    scheduler = transformers.get_cosine_schedule_with_warmup(
+    scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
         num_warmup_steps=int(num_train_steps * cfg.warmup_ratio),
         num_training_steps=num_train_steps

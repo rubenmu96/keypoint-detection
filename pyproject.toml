@@ -7,24 +7,36 @@ package-mode = false
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.12,<3.14"
 matplotlib = "^3.10.3"
-transformers = "^4.52.4"
-datasets = "^3.6.0"
 albumentations = ">=2.0.8"
 numpy = "^2.3.0"
 pytubefix = ">=8.13.1"
 validators = ">=0.35.0"
 opencv-python = ">=4.11.0.86"
+imagesize = "^1.4.1"
 
+onnx = ">=1.18.0"
+onnxruntime = ">=1.22"
 torch = [
-    { version = "^2.7.0", markers="sys_platform == 'win32'", source = "torch_cuda128" },
-    { version = "^2.7.0", markers="sys_platform != 'win32'", source = "pypi" },
+    { version = ">=2.7.0", markers = "sys_platform == 'win32'",  source = "torch_cuda128" },
+    { version = ">=2.7.0", markers = "sys_platform == 'linux'",  source = "torch_cpu" },
+    { version = ">=2.7.0", markers = "sys_platform == 'darwin'" },
+]
+torchvision = [
+    { version = ">=0.22.0", markers = "sys_platform == 'win32'",  source = "torch_cuda128" },
+    { version = ">=0.22.0", markers = "sys_platform == 'linux'",  source = "torch_cpu" },
+    { version = ">=0.22.0", markers = "sys_platform == 'darwin'" },
 ]
 
 [[tool.poetry.source]]
 name = "torch_cuda128"
 url = "https://download.pytorch.org/whl/cu128"
+priority = "explicit"
+
+[[tool.poetry.source]]
+name = "torch_cpu"
+url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
 [build-system]
