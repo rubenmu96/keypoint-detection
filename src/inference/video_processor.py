@@ -1,3 +1,4 @@
+import os
 import cv2
 from pytubefix import YouTube
 import validators
@@ -5,10 +6,13 @@ import validators
 class VideoProcessor:
     """Youtube and mp4 video processor"""
     def __init__(self, video_path, video_name, save_path=None, folder=None, max_duration=None, start_time=None, end_time=None):
+        if folder is not None:
+            folder = os.path.join(folder, "") # add "/" to the end
+
         self.video_path = video_path
         self.video_name = video_name
         self.save_path = save_path if folder is None else f"{folder}{save_path}"
-        self.folder = folder # make sure folder ends with "/"?
+        self.folder = folder
         self.max_duration = max_duration
         self.start_time = start_time
         self.end_time = end_time
@@ -33,6 +37,7 @@ class VideoProcessor:
             return string
 
     def get_yt_video(self, url, folder="examples/", video_name=None):
+        """Get video from youtube"""
         youtube = YouTube(url)
         
         if video_name is not None:
@@ -42,7 +47,7 @@ class VideoProcessor:
         return self._contains_mp4(f"{folder}{youtube.title}")
 
     def extract_video_segment(self, input_path, output_path, start_time, end_time):
-        input_path = "examples/tennis_match.mp4"
+        """Reduce video between [start_time, end_time]"""
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
             raise ValueError(f"Could not open video: {input_path}")

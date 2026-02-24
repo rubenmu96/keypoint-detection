@@ -18,13 +18,13 @@ validators = ">=0.35.0"
 opencv-python = ">=4.11.0.86"
 
 torch = [
-    { version = "^2.5.0", markers="sys_platform == 'win32'", source = "torch_cuda124" },
-    { version = "^2.5.0", markers="sys_platform != 'win32'", source = "pypi" },
+    { version = "^2.7.0", markers="sys_platform == 'win32'", source = "torch_cuda128" },
+    { version = "^2.7.0", markers="sys_platform != 'win32'", source = "pypi" },
 ]
 
 [[tool.poetry.source]]
-name = "torch_cuda124"
-url = "https://download.pytorch.org/whl/cu124"
+name = "torch_cuda128"
+url = "https://download.pytorch.org/whl/cu128"
 priority = "explicit"
 
 [build-system]
@@ -33,3 +33,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
+pytest = "^8.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

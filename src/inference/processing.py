@@ -4,15 +4,7 @@ import torch
 from src.utils import extract_keypoints, keypoint_unscaler
 
 def overlapping_kps(keypoints, max_values, pixel_distance):
-    """
-    Remove overlapping keypoints
-    
-    Args:
-        keypoints: numpy array of shape (n_keypoints, 2) or (n_keypoints*2,)
-        max_values: list or array of confidence values for each keypoint
-        pixel_distance: minimum distance in pixels between keypoints
-        image_width, image_height: dimensions for converting normalized coords to pixels
-    """
+    """Remove overlapping keypoints."""
     def remove_kps(pairs, max_values):
         remove = []
         for row, column in pairs:
@@ -57,7 +49,7 @@ def overlapping_kps(keypoints, max_values, pixel_distance):
     return keypoints_copy.flatten()
 
 def filter_low_probabilities(keypoints, max_values, threshold):
-    """Remove keypoints (set to (-1, -1)) if confidence is below threshold"""
+    """Remove keypoints (set to (-1, -1)) if confidence is below threshold."""
     if keypoints.ndim == 1 or keypoints.shape[1] != 2:
         keypoints = keypoints.reshape(-1, 2)
     
@@ -74,69 +66,70 @@ def filter_low_probabilities(keypoints, max_values, threshold):
     return keypoints_copy.flatten()
 
 
-def num_kps_req(keypoints, num_kps=7):
-    """Remove all keypoints if the number of valid keypoints is less than required"""
-    # TODO: need some rework, maybe require that both center keypoints and certain amount of keypoints should be present
+def num_kps_req(keypoints, num_kps=7, required_indices=None):
+    """
+    Invalidate all keypoints if quality thresholds are not met.
+
+    Two independent checks can be configured:
+    - ``num_kps``: minimum number of valid keypoints required in total.
+    - ``required_indices``: list of keypoint indices that *must all* be valid
+      (e.g. ``[-2, -1]`` for the two center-court keypoints).
+
+    If either check fails, every keypoint is set to (-1, -1).
+    """
     if keypoints.ndim == 1 or keypoints.shape[1] != 2:
         keypoints = keypoints.reshape(-1, 2)
-    
-    valid_kps = np.sum(np.all(keypoints != -1, axis=1))
-    
-    if valid_kps < num_kps:
+
+    valid_mask = np.all(keypoints != -1, axis=1)
+    failed = np.sum(valid_mask) < num_kps
+
+    if not failed and required_indices is not None:
+        n = len(keypoints)
+        for idx in required_indices:
+            if not valid_mask[idx % n]:  # support negative indices
+                failed = True
+                break
+
+    if failed:
         keypoints_copy = keypoints.copy()
         keypoints_copy[:] = -1
         return keypoints_copy.flatten()
-    
+
     return keypoints.flatten()
 
 
-def kps_postprocessor(keypoints, max_values, threshold, pixel_distance, num_kps=7):
-    """
-    Apply all keypoint post-processing steps
-    
-    Args:
-        keypoints: numpy array of keypoints
-        max_values: confidence values for each keypoint
-        threshold: minimum confidence threshold
-        pixel_distance: minimum pixel distance between keypoints
-        num_kps: minimum number of required keypoints
-    
-    Returns:
-        processed keypoints as flattened array
-    """
-    # Step 1: Filter low probability keypoints
+def kps_postprocessor(
+        keypoints, max_values, threshold, pixel_distance, num_kps=7, required_indices=None
+    ):
+    """Apply all keypoint post-processing steps"""
     keypoints = filter_low_probabilities(keypoints, max_values, threshold)
-    
-    # Step 2: Remove overlapping keypoints
-    keypoints = overlapping_kps(
-        keypoints, max_values, pixel_distance
-    )
-    
-    # Step 3: Check if we have enough keypoints
-    keypoints = num_kps_req(keypoints, num_kps)
-    
+    keypoints = overlapping_kps(keypoints, max_values, pixel_distance)
+    keypoints = num_kps_req(keypoints, num_kps, required_indices)
     return keypoints
 
 def process_heatmap_keypoints(
-        cfg, keypoints, threshold=-2, pixel_distance=10, num_kps=7, image_width=None, image_height=None
+        cfg, keypoints, threshold=-2, pixel_distance=10,
+        num_kps=7, image_width=None, image_height=None
     ):
     """
     Complete pipeline for processing a batch of heatmaps into filtered keypoints.
     """
+    # Turn heatmap into keypoints
     keypoints, max_values = extract_keypoints(keypoints, return_max_values=True)
     
     processed_keypoints = []
-    
     for b in range(len(keypoints)):
         batch_kps = keypoints[b]
         batch_max_vals = max_values[b]
         
+        # Unscale keypoints
         scaled_kps = keypoint_unscaler(
             cfg, batch_kps, image_width, image_height
         )
         
         kps_np = scaled_kps.cpu().numpy() if torch.is_tensor(scaled_kps) else scaled_kps
         
+        # Post-processing to remove low-threshold and overlapping keypoints
         processed_kps = kps_postprocessor(
             kps_np, batch_max_vals, threshold, pixel_distance, num_kps
         )
@@ -147,7 +140,7 @@ def process_heatmap_keypoints(
 
 
 def load_fp16_model(model, checkpoint_path, device):
-    """Load model from FP16 checkpoint"""
+    """Load model from FP16 checkpoint else FP32"""
     checkpoint = torch.load(checkpoint_path, map_location='cpu')
     
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:

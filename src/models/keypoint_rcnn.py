@@ -5,14 +5,19 @@ from torchvision.models.detection.keypoint_rcnn import KeypointRCNNPredictor
 
 
 class KeypointRCNN(nn.Module):
-    def __init__(self, num_kps, num_classes=2):
+    def __init__(self, num_kps, num_classes=2, score_thresh=0.005):
         super().__init__()
         self.num_kps = num_kps
         self.model = torchvision.models.detection.keypointrcnn_resnet50_fpn(
             weights='DEFAULT',
-            num_classes=num_classes
+            num_classes=num_classes,
+            # Default is 0.05 — too high for an untrained/early-epoch model.
+            # Lower threshold so vis_testing and eval always get at least one
+            # detection candidate during training. A well-trained model will
+            # produce high-confidence detections regardless of this value.
+            box_score_thresh=score_thresh,
         )
-        
+
         in_features = self.model.roi_heads.keypoint_predictor.kps_score_lowres.in_channels
         self.model.roi_heads.keypoint_predictor = KeypointRCNNPredictor(
             in_channels=in_features,

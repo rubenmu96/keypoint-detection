@@ -9,14 +9,16 @@ from src.utils import load_model_inference
 from src.inference import load_fp16_model
 
 def convert_onnx_fp32(folder):
-    # TODO: add name for load_model_inference
+    """Convert FP32 model to onnx"""
+    folder = os.path.join(folder, "")
+
     cfg_path = glob.glob(f"{folder}*.json")[0]
     with open(cfg_path, 'r') as f:
         loaded_dict = json.load(f)
     cfg = dict_to_config(loaded_dict)
-    
+
     load_model_path = glob.glob(f"{folder}*_fp32.pth")[0]
-    model = load_model_inference("heatmap", cfg)
+    model = load_model_inference(cfg.task, cfg)
     model = load_fp16_model(model, load_model_path, cfg.device)
     model = model.to("cpu")
     model.eval()
@@ -32,10 +34,10 @@ def convert_onnx_fp32(folder):
         opset_version=18,
         do_constant_folding=True,
         input_names=["input"],
-        output_names=["heatmaps"], # TODO: change
+        output_names=[cfg.task],
         dynamic_axes={
             "input": {0: "batch_size"},
-            "heatmaps": {0: "batch_size"}
+            cfg.task: {0: "batch_size"}
         }, dynamo=False
     )
     
@@ -43,8 +45,7 @@ def convert_onnx_fp32(folder):
 
 
 def convert_onnx_fp16(folder):
-    # TODO: add name for load_model_inference
-    """Export FP16 version."""
+    """Convert FP16 model to onnx"""
     if not torch.cuda.is_available():
         print("CUDA not available, skipping FP16 export")
         return
@@ -63,7 +64,7 @@ def convert_onnx_fp16(folder):
     else:
         load_model_path = fp32_paths[0]
     
-    model = load_model_inference("heatmap", cfg)
+    model = load_model_inference(cfg.task, cfg)
     model = load_fp16_model(model, load_model_path, cfg.device)
     model = model.half().cuda()
     model.eval()
@@ -79,9 +80,9 @@ def convert_onnx_fp16(folder):
         opset_version=18,
         do_constant_folding=True,
         input_names=["input"],
-        output_names=["heatmaps"], # make as parameter?
+        output_names=[cfg.task],
         dynamic_axes={
             "input": {0: "batch_size"},
-            "heatmaps": {0: "batch_size"}
+            cfg.task: {0: "batch_size"}
         }, dynamo=False
     )

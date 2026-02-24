@@ -14,3 +14,4 @@ test.ipynb
 src/inference/inf_no_onnx.py
 src/inference/inference_autocast.py
 README_test.md
+test.py

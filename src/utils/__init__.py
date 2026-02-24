@@ -8,6 +8,7 @@ from .utils import (
 from .processing import (
     keypoint_scaler,
     keypoint_unscaler,
+    scale_keypoints_to_original,
     are_keypoints_valid,
     keypoints_with_visibility,
     keypoints_region,

@@ -30,8 +30,7 @@ def keypoint_scaler(kps, width, height, scale=None):
 def keypoint_unscaler(cfg, kps, orig_width, orig_height):
     """Unscale keypoints given scale."""
     kps = kps.clone() if torch.is_tensor(kps) else kps.copy()
-    # kps = kps.float() # TODO: hmm
-    
+
     # [B, K, 2] or [K, 2] shape
     if kps.ndim >= 2 and kps.shape[-1] == 2:
         if cfg.scale == (-1, 1):
@@ -86,6 +85,26 @@ def keypoints_region(keypoints, offset=10, width=None, height=None):
         y_max = min(y_max, height - 1)
     
     return torch.tensor([[x_min, y_min, x_max, y_max]], dtype=torch.float32)
+
+def scale_keypoints_to_original(kps, model_width, model_height, orig_width, orig_height):
+    """
+    Scale RCNN pixel-space keypoints from model input resolution to original image size.
+
+    Use this instead of keypoint_unscaler() for KeypointRCNN outputs, which are
+    already in pixel coords (not normalized) at the model's input resolution.
+
+    Args:
+        kps: numpy array of shape (K, 2) or (N, K, 2)
+        model_width/model_height: resolution the model ran at (e.g. cfg.width/height)
+        orig_width/orig_height: resolution of the original image
+
+    Returns:
+        Rescaled copy of kps.
+    """
+    kps = kps.copy()
+    kps[..., 0] = kps[..., 0] * (orig_width / model_width)
+    kps[..., 1] = kps[..., 1] * (orig_height / model_height)
+    return kps
 
 def keypoints_with_visibility(kps, visibility=None):
     """Get if keypoints are visible or not."""

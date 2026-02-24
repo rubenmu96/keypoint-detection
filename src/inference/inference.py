@@ -8,34 +8,12 @@ import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 import onnxruntime as ort
 
-from src.utils import keypoint_unscaler
+from src.utils import keypoint_unscaler, scale_keypoints_to_original
 
-# from src.inference.processing import (
-#     process_heatmap_keypoints,
-#     load_fp16_model
-# ) # TODO: .processing vs. src.inference.processing
-
-from .processing import (
+from src.inference.processing  import (
     process_heatmap_keypoints,
     load_fp16_model
 )
-
- # TODO: move function
-def summary_statistics(inference_times, frame_count, use_fp16):
-    avg_inference_time = np.mean(inference_times)
-    std_inference_time = np.std(inference_times)
-    median_inference_time = np.median(inference_times)
-    
-    print(f"\n{'='*50}")
-    print(f"Performance Statistics ({'FP16' if use_fp16 else 'FP32'})")
-    print(f"{'='*50}")
-    print(f"Processed frames: {frame_count}")
-    print(f"Average inference time: {avg_inference_time*1000:.2f}ms ± {std_inference_time*1000:.2f}ms")
-    print(f"Median inference time: {median_inference_time*1000:.2f}ms")
-    print(f"Average inference FPS: {1/avg_inference_time:.2f}")
-    print(f"Min inference time: {min(inference_times)*1000:.2f}ms")
-    print(f"Max inference time: {max(inference_times)*1000:.2f}ms")
-    print(f"{'='*50}")
 
 class KeypointPredictor:
     def __init__(self, cfg, model=None, load_model=None, use_fp16=True, onnx_path=None):
@@ -54,14 +32,23 @@ class KeypointPredictor:
         
         self.width = cfg.width
         self.height = cfg.height
-        
-        self.transform = A.Compose([
-            A.Resize(width=cfg.width, height=cfg.height),
-            A.Normalize(mean=cfg.mean, std=cfg.std),
-            ToTensorV2(p=1.0),
-        ])
+        self.threshold = getattr(cfg, 'threshold', -2.0)
+        self.pixel_distance = getattr(cfg, 'pixel_distance', 10)
+
+        if cfg.model_name == "KeypointRCNN":
+            self.transform = A.Compose([
+                A.Resize(width=cfg.width, height=cfg.height),
+                A.ToFloat(max_value=255),
+                ToTensorV2(p=1.0),
+            ])
+        else:
+            self.transform = A.Compose([
+                A.Resize(width=cfg.width, height=cfg.height),
+                A.Normalize(mean=cfg.mean, std=cfg.std),
+                ToTensorV2(p=1.0),
+            ])
     
-    # ==================== Initialization ====================
+    # Initialization
     
     def _init_onnx(self, onnx_path):
         """Initialize ONNX."""
@@ -133,7 +120,7 @@ class KeypointPredictor:
             if self.use_fp16:
                 torch.set_float32_matmul_precision('high')
     
-    # ==================== Main Inference ====================
+    # Main infernece
     
     def predict(self, image):
         """Predict keypoints for a single image."""
@@ -169,25 +156,37 @@ class KeypointPredictor:
         if self.cfg.model_name == "ResNetHeatmap":
             if isinstance(heatmaps, np.ndarray):
                 heatmaps = torch.from_numpy(heatmaps)
-            
-            # TODO: choice for threshold parameter
+
             return process_heatmap_keypoints(
                 cfg=self.cfg,
                 keypoints=heatmaps,
-                threshold=-2.0,
-                pixel_distance=10,
+                threshold=self.threshold,
+                pixel_distance=self.pixel_distance,
                 image_width=original_w,
                 image_height=original_h
+            )
+        elif self.cfg.model_name == "KeypointRCNN":
+            # heatmaps is a list of prediction dicts (one per image in the batch)
+            pred = heatmaps[0] if isinstance(heatmaps, list) else heatmaps
+            scores = pred["scores"]
+            if scores.numel() == 0:
+                # No detections — return zeros so callers don't crash
+                return np.zeros((self.cfg.num_kps, 2), dtype=np.float32)
+            kps = pred["keypoints"]  # (N, K, 3) — pixel coords at model input resolution
+            best = scores.argmax()
+            kps_best = kps[best, :, :2].cpu().numpy()  # (K, 2)
+            return scale_keypoints_to_original(
+                kps_best, self.cfg.width, self.cfg.height, original_w, original_h
             )
         else:
             if torch.is_tensor(heatmaps):
                 heatmaps = heatmaps.squeeze().cpu().numpy()
             else:
                 heatmaps = heatmaps.squeeze()
-            
+
             return keypoint_unscaler(self.cfg, heatmaps, original_w, original_h)
         
-    # ==================== Batch Inference ====================
+    # Batch inference
 
     def predict_batch(self, images):
         """Predict keypoints for a batch of images."""
@@ -232,18 +231,16 @@ class KeypointPredictor:
             batch = batch.half()
         return self.model(batch)
     
-    # ==================== Visualization ====================
+    # Visualization
     
-    # TODO: combine these functions
-
-    def draw_keypoints(self, image, keypoints, save_path=None, show=True):
-        """Draw keypoints on image."""
+    def draw_keypoints(self, image, keypoints, bgr=False, save_path=None, show=True):
+        """Draw keypoints on image. Set bgr=True for BGR frames (e.g. video)."""
         if keypoints.ndim == 2:
             keypoints = keypoints.flatten()
 
         if isinstance(image, str):
             image = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2RGB)
-        
+
         image = image.copy()
 
         for i in range(0, len(keypoints), 2):
@@ -251,38 +248,22 @@ class KeypointPredictor:
             if x > 0 and y > 0:
                 x = max(0, min(x, image.shape[1] - 1))
                 y = max(0, min(y, image.shape[0] - 1))
-                cv2.putText(image, str(i//2), (x, y-10), 
+                cv2.putText(image, str(i//2), (x, y-10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                 cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
-        
-        if save_path or show:
+
+        if not bgr and (save_path or show):
             plt.imshow(image)
 
             if save_path:
                 plt.savefig(save_path)
-        
+
             if show:
                 plt.show()
-        
+
         return image
     
-    def draw_keypoints_bgr(self, frame, keypoints):
-        """Draw keypoints on BGR frame (for video)."""
-        if keypoints.ndim == 2:
-            keypoints = keypoints.flatten()
-
-        frame = frame.copy()
-        for i in range(0, len(keypoints), 2):
-            x, y = int(keypoints[i]), int(keypoints[i+1])
-            if x > 0 and y > 0:
-                x = max(0, min(x, frame.shape[1] - 1))
-                y = max(0, min(y, frame.shape[0] - 1))
-                cv2.putText(frame, str(i//2), (x, y-10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                cv2.circle(frame, (x, y), 5, (0, 0, 255), -1)
-        return frame
-    
-    # ==================== Video Processing ====================
+    # Video processing
     
     def _warmup(self, height, width, iterations=10):
         """Warmup for consistent timing."""
@@ -342,7 +323,7 @@ class KeypointPredictor:
             inference_times.append(inference_time)
             frame_count += 1
 
-            frame_with_kps = self.draw_keypoints_bgr(frame, keypoints)
+            frame_with_kps = self.draw_keypoints(frame, keypoints, bgr=True)
             writer.write(frame_with_kps)
 
             if show:
@@ -374,3 +355,20 @@ class KeypointPredictor:
                 inference_times, frame_count, 
                 self.use_fp16 if not self.use_onnx else False
             )
+
+def summary_statistics(inference_times, frame_count, use_fp16):
+    """Calculate FPS statistics"""
+    avg_inference_time = np.mean(inference_times)
+    std_inference_time = np.std(inference_times)
+    median_inference_time = np.median(inference_times)
+    
+    print(f"\n{'='*50}")
+    print(f"Performance Statistics ({'FP16' if use_fp16 else 'FP32'})")
+    print(f"{'='*50}")
+    print(f"Processed frames: {frame_count}")
+    print(f"Average inference time: {avg_inference_time*1000:.2f}ms ± {std_inference_time*1000:.2f}ms")
+    print(f"Median inference time: {median_inference_time*1000:.2f}ms")
+    print(f"Average inference FPS: {1/avg_inference_time:.2f}")
+    print(f"Min inference time: {min(inference_times)*1000:.2f}ms")
+    print(f"Max inference time: {max(inference_times)*1000:.2f}ms")
+    print(f"{'='*50}")

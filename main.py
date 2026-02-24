@@ -79,11 +79,12 @@ def main(args, use_amp):
 
     history = train.train(train_loader, valid_loader)
 
+    folder = os.path.join(cfg.folder, "")
     if cfg.onnx:
-        success = convert_onnx_fp32(folder=cfg.folder)
+        success = convert_onnx_fp32(folder=folder)
         
         if success and use_amp:
-            convert_onnx_fp16(cfg.folder)
+            convert_onnx_fp16(folder)
 
 if __name__ == "__main__":
     """
@@ -91,12 +92,14 @@ if __name__ == "__main__":
     Train using fp16: python main.py --name "heatmap" --num_workers 4
     Train using fp32: python main.py --name "heatmap" --num_workers 4 --fp32
 
+    RCNN currently requires FP32.
+
     Other parameters can be changed in the config (config/config.py and model_configs.py).
 
     Be careful with num_workers on Windows, num_workers > 0 might give unpredictable results or not work.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, default="heatmap", help="resnet, heatmap, or rcnn") # find a different name?
+    parser.add_argument('--name', type=str, default="rcnn", help="resnet, heatmap, or rcnn") # find a different name?
     parser.add_argument('--fp32', action="store_true", help="Use FP32 instead of FP16")
     parser.add_argument('--num_workers', type=int, default=0, help="Number of workers")
     args = parser.parse_args()

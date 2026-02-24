@@ -1,6 +1,15 @@
+"""
+Calculation of loss and accurcay metrics
+
+"""
+import warnings
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from src.utils import extract_keypoints
 from src.utils import create_heatmap, keypoint_unscaler
 
 
@@ -92,7 +101,6 @@ def _calculate_keypoint_loss(
     if valid_count == 0:
         # Every image in this batch had zero detections.  Returning 0.0 would
         # make the loss look perfect; instead warn so the caller can decide.
-        import warnings
         warnings.warn(
             "KeypointRCNN: no valid detections in this batch — loss is 0.0 "
             "and does not reflect model quality.",
@@ -104,6 +112,7 @@ def _calculate_keypoint_loss(
 
 
 def compute_loss(cfg, criterion, preds, targets):
+    """Compute the loss"""
     if cfg.model_name == "ResNetHeatmap":
         criterion_fn = loss_dictionary[criterion]
         targets = create_heatmap(
@@ -128,16 +137,6 @@ def compute_loss(cfg, criterion, preds, targets):
     
     else:
         raise ValueError(f"Unknown model: {cfg.model_name}")
-    
-
-from src.utils import extract_keypoints
-import numpy as np
-
-"""
-Simple accuracy metrics for keypoint detection
-- pck - 
-- mpjpe - 
-"""
 
 def compute_pck(
     preds,
@@ -145,6 +144,16 @@ def compute_pck(
     image_size,
     threshold=0.05,
 ):
+    """
+    PCK (Percentage of Correct Keypoints).
+
+    A keypoint is "correct" if its Euclidean distance to the ground-truth is
+    within `threshold * diag` pixels, where `diag = sqrt(H^2 + W^2)` is the
+    image diagonal used as the normalizer.  Normalizing by the diagonal makes
+    the threshold scale-invariant across different image resolutions.
+
+    PCK@0.05 means threshold = 5 % of the image diagonal.
+    """
     # Reshape to [B, K, 2] if flattened
     if preds.ndim == 2:
         preds = preds.view(preds.shape[0], -1, 2)
@@ -182,6 +191,14 @@ def compute_mpjpe(
     preds,
     targets,
 ):
+    """
+    MPJPE (Mean Per-Joint Position Error).
+
+    For each keypoint the Euclidean distance between prediction and ground-truth
+    is computed, then averaged across all keypoints and all samples in the batch.
+    Reported in pixels (at the unscaled / original image resolution).
+    Lower is better.
+    """
     if preds.ndim == 2:
         preds = preds.view(preds.shape[0], -1, 2)
     if targets.ndim == 2:
@@ -203,48 +220,8 @@ def compute_mpjpe(
         "std": distances.std().item(),
     }
 
-# def compute_accuracy(cfg, preds, targets, image_size=None):
-#     if cfg.model_name == "ResNetHeatmap":
-#         preds = extract_keypoints(preds)
-
-#     elif cfg.model_name == "KeypointRCNN":
-#         pred_coords = []
-#         target_coords = []
-        
-#         for pred_dict, target_dict in zip(preds, targets):
-#             if pred_dict["keypoints"].shape[0] > 0:
-#                 pred_coords.append(pred_dict["keypoints"][0, :, :2])
-#                 target_coords.append(target_dict["keypoints"][0, :, :2])
-        
-#         if not pred_coords:
-#             return {"pck": 0.0, "mpjpe": float('inf')}
-        
-#         preds = torch.stack(pred_coords)
-#         targets = torch.stack(target_coords)
-
-#     if image_size is None:
-#         image_size = (cfg.height, cfg.width)
-    
-#     h, w = image_size
-
-#     preds = keypoint_unscaler(
-#         cfg, preds, orig_width=w, orig_height=h
-#     )
-#     targets = keypoint_unscaler(
-#         cfg, targets, orig_width=w, orig_height=h
-#     )
-
-#     # Compute metrics
-#     pck_results = compute_pck(preds, targets, threshold=0.05, image_size=image_size)
-#     mpjpe_results = compute_mpjpe(preds, targets)
-    
-#     return {
-#         "pck@0.05": pck_results["pck"],
-#         "pck@0.1": compute_pck(preds, targets, threshold=0.1, image_size=image_size)["pck"],
-#         "mpjpe": mpjpe_results["mpjpe"],
-#     }
-
 def compute_accuracy(cfg, preds, targets, image_size=None):
+    """Compute accuracy metrics for keypoint models"""
     if cfg.model_name == "ResNetHeatmap":
         preds = extract_keypoints(preds)
 
@@ -258,7 +235,7 @@ def compute_accuracy(cfg, preds, targets, image_size=None):
                 target_coords.append(target_dict["keypoints"][0, :, :2])
         
         if not pred_coords:
-            return {"pck": 0.0, "mpjpe": float('inf')}
+            return {"pck@0.05": 0.0, "pck@0.1": 0.0, "mpjpe": float('inf')}
         
         preds = torch.stack(pred_coords)
         targets = torch.stack(target_coords)
@@ -268,16 +245,18 @@ def compute_accuracy(cfg, preds, targets, image_size=None):
     
     h, w = image_size
 
-    # RCNN coords are already in pixel space — skip unscaling
+    # Skip scaling of Keypoint R-CNN
     if cfg.model_name != "KeypointRCNN":
         preds = keypoint_unscaler(cfg, preds, orig_width=w, orig_height=h)
         targets = keypoint_unscaler(cfg, targets, orig_width=w, orig_height=h)
 
-    pck_results = compute_pck(preds, targets, threshold=0.05, image_size=image_size)
+
+    normalizer = np.sqrt(h**2 + w**2)
+    normalized_distances = torch.norm(preds.float() - targets.float(), dim=-1) / normalizer
     mpjpe_results = compute_mpjpe(preds, targets)
-    
+
     return {
-        "pck@0.05": pck_results["pck"],
-        "pck@0.1": compute_pck(preds, targets, threshold=0.1, image_size=image_size)["pck"],
+        "pck@0.05": (normalized_distances <= 0.05).float().mean().item(),
+        "pck@0.1": (normalized_distances <= 0.1).float().mean().item(),
         "mpjpe": mpjpe_results["mpjpe"],
     }

@@ -12,13 +12,14 @@ import os
 from src.core import compute_loss, compute_accuracy
 from src.utils import (
     keypoint_unscaler,
+    scale_keypoints_to_original,
     extract_keypoints,
     get_file_type
 )
 
-class Trainer:  
+class Trainer:
     def __init__(
-            self, cfg, model, optimizer, criterion, scheduler=None, scaler=torch.amp.GradScaler('cuda'), use_amp=False
+            self, cfg, model, optimizer, criterion, scheduler=None, scaler=None, use_amp=False
         ):
         self.cfg = cfg
         self.model = model
@@ -28,8 +29,14 @@ class Trainer:
         self.device = cfg.device
         self.model_name = cfg.model_name
         self.folder = self.cfg.folder
-        self.scaler = scaler
-        self.use_amp = use_amp
+        # KeypointRCNN's loss_keypoint (~8.0 at init) consistently overflows
+        # in FP16, driving the GradScaler's scale to 0 within one epoch.
+        # bfloat16 would be the correct alternative but requires Ampere+ GPUs.
+        # For now, RCNN always trains in FP32 regardless of the use_amp flag.
+        rcnn = cfg.model_name == "KeypointRCNN"
+        amp_active = use_amp and not rcnn
+        self.scaler = torch.amp.GradScaler('cuda', enabled=amp_active)
+        self.use_amp = amp_active
 
     def save_model_fp32(self, model, path):
         """Save model in FP32 format"""
@@ -105,13 +112,16 @@ class Trainer:
             
             start = time.time()
             self.scaler.scale(loss).backward()
+            # Unscale before clipping so the clip threshold is in real gradient units.
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             times["backward"] += time.time() - start
-            
+
             start = time.time()
             self.scaler.step(self.optimizer)
             self.scaler.update()
             times["optimizer"] += time.time() - start
-            
+
             num_batches += 1
             total_loss += loss.item()
 
@@ -172,7 +182,6 @@ class Trainer:
             
             losses.append(loss)
 
-            # TODO: add time for accuracy calculations
             start = time.time()
             scores = compute_accuracy(self.cfg, outputs, kps)
             all_pck.append(scores["pck@0.05"])
@@ -223,64 +232,6 @@ class Trainer:
         stop = es >= patience
         return es, best_loss, stop
     
-    # # TODO: move testing functions outside?
-    # @torch.no_grad()
-    # def vis_testing(self, cfg, model, image_path, epoch, name, use_amp, folder_path="test-images/"):
-    #     if not os.path.exists(folder_path):
-    #         os.makedirs(folder_path)
-
-    #     def draw_keypoints(image, keypoints):
-    #         if keypoints.ndim == 2:
-    #             keypoints = keypoints.flatten()
-
-    #         image = image.copy()
-    #         for i in range(0, len(keypoints), 2):
-    #             x = int(keypoints[i])
-    #             y = int(keypoints[i+1])
-    #             cv2.putText(image, str(i//2), (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-    #             cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
-    #         plt.imshow(image)
-    #         plt.savefig(f"{folder_path}/{name}_{epoch}.png")
-
-    #     transform = A.Compose([
-    #         A.Resize(width=cfg.width, height=cfg.height),
-    #         A.Normalize(mean=cfg.mean, std=cfg.std),
-    #         ToTensorV2(p=1.0),
-    #     ])
-    #     image = cv2.imread(image_path)
-    #     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    #     original_h, original_w = image.shape[:2]
-    #     image_tensor = transform(image=image)["image"].unsqueeze(0)
-
-    #     image_tensor = image_tensor.to(cfg.device)
-
-    #     model.eval()
-    #     with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
-    #         outputs = model(image_tensor)
-
-    #     if cfg.model_name == "ResNetHeatmap":
-    #         outputs = extract_keypoints(outputs)
-
-    #     keypoints = outputs.cpu().numpy()[0]
-
-    #     keypoints = keypoint_unscaler(
-    #         cfg, keypoints, original_w, original_h
-    #     )
-    #     draw_keypoints(image, keypoints)
-
-    # def testing(self, cfg, model, epoch, use_amp):
-    #     for i, img_pth in enumerate(cfg.sample_image_path):
-    #         if len(cfg.sample_image_path) == len(cfg.display_names):
-    #             name = cfg.display_names[i]
-    #         else:
-    #             name = f"img_{i}"
-
-    #         file_type = get_file_type(img_pth)
-    #         if file_type == "image":
-    #             self.vis_testing(cfg, model, img_pth, epoch + 1, name, use_amp)
-    #         else:
-    #             continue
-    
     def train(self, train_data, valid_data):
         epoch_metrics = []
         es = 0
@@ -303,8 +254,9 @@ class Trainer:
                 "valid_mpjpe": f'{valid_metrics["mpjpe"]:.4f}',
             })
             
+            metric_key = self.cfg.metric_tracker.replace("valid_", "")
             es, best_loss, stop = self._early_stopping(
-                es, valid_metrics["loss"], best_loss, 
+                es, valid_metrics[metric_key], best_loss,
                 self.cfg.patience, greater_is_better
             )
 
@@ -347,11 +299,18 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
         plt.imshow(image)
         plt.savefig(f"{folder_path}/{name}_{epoch}.png")
 
-    transform = A.Compose([
-        A.Resize(width=cfg.width, height=cfg.height),
-        A.Normalize(mean=cfg.mean, std=cfg.std),
-        ToTensorV2(p=1.0),
-    ])
+    if cfg.model_name == "KeypointRCNN":
+        transform = A.Compose([
+            A.Resize(width=cfg.width, height=cfg.height),
+            A.ToFloat(max_value=255),
+            ToTensorV2(p=1.0),
+        ])
+    else:
+        transform = A.Compose([
+            A.Resize(width=cfg.width, height=cfg.height),
+            A.Normalize(mean=cfg.mean, std=cfg.std),
+            ToTensorV2(p=1.0),
+        ])
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     original_h, original_w = image.shape[:2]
@@ -365,12 +324,27 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
 
     if cfg.model_name == "ResNetHeatmap":
         outputs = extract_keypoints(outputs)
+        keypoints = outputs.cpu().numpy()[0]
+        keypoints = keypoint_unscaler(cfg, keypoints, original_w, original_h)
+    elif cfg.model_name == "KeypointRCNN":
+        # outputs is a list of dicts; grab keypoints from the first (and only) image
+        # Shape: [num_instances, num_keypoints, 3] — x, y, visibility
+        scores = outputs[0]["scores"]
+        if scores.numel() == 0:
+            print(f"KeypointRCNN detected no instances in {image_path} — skipping visualisation.")
+            return
+        kps = outputs[0]["keypoints"]  # (N, K, 3)
+        best = scores.argmax()
+        # RCNN outputs are already in pixel coords at model input resolution;
+        # scale to original image size.
+        kps_best = kps[best, :, :2].cpu().numpy()  # (K, 2)
+        keypoints = scale_keypoints_to_original(
+            kps_best, cfg.width, cfg.height, original_w, original_h
+        )
+    else:
+        keypoints = outputs.cpu().numpy()[0]
+        keypoints = keypoint_unscaler(cfg, keypoints, original_w, original_h)
 
-    keypoints = outputs.cpu().numpy()[0]
-
-    keypoints = keypoint_unscaler(
-        cfg, keypoints, original_w, original_h
-    )
     draw_keypoints(image, keypoints)
 
 def testing(cfg, model, epoch, use_amp):

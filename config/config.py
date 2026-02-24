@@ -19,8 +19,8 @@ class BaseConfig:
 
     # Training parameters
     epochs = 35
-    batch_size = 16
-    learn_rate = 5e-4
+    batch_size = 4 # 4 for rcnn, 16 for heatmap/resnet
+    learn_rate = 1e-5 # 5e-4 for heatmap/resnet
     weight_decay = 1e-4
     warmup_ratio = 0.15
 
@@ -29,8 +29,8 @@ class BaseConfig:
     reset = False
 
     # Best model
-    greater_is_better = False # True if greater value means metric is better (e.g., mpjpe), else False (e.g., loss)
-    metric_tracker = "valid_loss" # supports valid_loss, valid_mpjpe, valid_pck@0.05, valid_pck@0.01
+    greater_is_better = False # True if higher value is better (e.g., pck@0.05), False if lower is better (e.g., loss, mpjpe)
+    metric_tracker = "valid_loss" # supports valid_loss, valid_mpjpe, valid_pck@0.05
 
     """
     For testing model on images during training at each epoch

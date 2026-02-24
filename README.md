@@ -34,6 +34,9 @@ Main focus on ResNet with heatmap classification head.
 
 
 ## TODO
+- check all 3 models if they work given all the code changes, then see performance
+
+
 - converting models to onnx and inference pipeline with support for onnx
 - get a better understanding of keypoint-rcnn
 - improve loss calculations + add more losses?
