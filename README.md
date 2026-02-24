@@ -1,55 +1,78 @@
 # Keypoint detection
-Keypoint detection for tennis field.
+Court keypoint detection for tennis match footage. The model detects **14 keypoints** — 7 per half of the court. Three model architectures are supported with a shared training and inference pipeline:
 
-At each tennis half, we want to detect 7 keypoints. 
+| Model | Architecture | Output |
+|---|---|---|
+| `resnet` | ResNet-34 backbone + regression head | `[B, 28]` flat coordinates |
+| `heatmap` | ResNet-34 backbone + dilated conv + heatmap head | `[B, 14, H, W]` heatmaps |
+| `rcnn` | Keypoint R-CNN (ResNet-50 FPN) | list of detection dicts |
 
+The **heatmap model** (`resnet34` backbone) is the primary model. It produces one Gaussian heatmap per keypoint, extracts the argmax coordinate, and passes the result through a post-processing pipeline (confidence filtering, overlap removal, minimum keypoint count check).
+
+---
 ### Dataset
-The dataset consists of...
+The dataset is taken from https://github.com/yastrebksv/TennisCourtDetector. In total there are 8841 images.
 
-### How to run
-Create virtual environment and install packages by using ```poetry install --no-root```
+--- 
+## Training
 
-Help: ```poetry show -v``` to get virtualenv path, then change to this path if necessary (in VSCode: ```ctrl + shifft + p```, choose ```Python: Select Interpreter```, copy the path). 
+```bash
+# Train the heatmap model with FP16 (default)
+python main.py --name heatmap --num_workers 4
 
-To train the model, run...
+# Train with FP32
+python main.py --name heatmap --num_workers 4 --fp32
 
-To run the model on a tennis match, use inference_image.py for image and inference_video.py for video.
+# Train the regression model
+python main.py --name resnet --num_workers 4
 
-TEST MODEL ON YOUTUBE TENNIS MATCH! Look into inference time of the 3 different models
+# Train Keypoint R-CNN
+python main.py --name rcnn --num_workers 4
+```
 
-## Models
-- ResNet
-- ResNet with heatmap classification head
-- keypoint-rcnn
+---
+## Inference
 
-The inference.py supports folder prediction (for images), image prediction and video prediction. The format (folder, image or video) is automatically detected.
+The `inference.py` entry point accepts an image, a video file, or a folder of images. The input type is detected automatically from the file extension.
 
-Main focus on ResNet with heatmap classification head.
+```bash
+# Single image (PyTorch FP16)
+python inference.py \
+    --media "dataset/sample_images/clay.jpg" \
+    --model_folder "models/resnet34-hm/"
 
-## Performance
+# Single image (ONNX)
+python inference.py \
+    --media "dataset/sample_images/clay.jpg" \
+    --model_folder "models/resnet34-hm/" \
+    --use_onnx
+
+# Video (ONNX FP16, with FPS limiting to match source video)
+python inference.py \
+    --media "examples/tennis_match_shortened.mp4" \
+    --model_folder "models/resnet34-hm/" \
+    --use_onnx
+
+# Video (ONNX FP32)
+python inference.py \
+    --media "examples/tennis_match_shortened.mp4" \
+    --model_folder "models/resnet34-hm/" \
+    --use_onnx --fp32
+
+# Folder of images (batch size 4)
+python inference.py \
+    --media "dataset/sample_images/" \
+    --model_folder "models/resnet34-hm/" \
+    --use_onnx \
+    --batch_size 4 \
+    --output_dir "predictions/"
+```
 
 
-
-### Improvements (show performance on the 4 test images?)
-
-
-## TODO
-- check all 3 models if they work given all the code changes, then see performance
-
-
-- converting models to onnx and inference pipeline with support for onnx
-- get a better understanding of keypoint-rcnn
-- improve loss calculations + add more losses?
-- Test model_size change in heatmap
-- Write a readme
-- poetry for newest cuda
-- Optimize dataset.py
-- Decide if dropping or keeping Keypoint-RCNN
-
-
-## TODO (later)
+## Future updates
 - Checkpoint training
 - Multiscale training
 - Batch inference for video
-- Keypoint-rcnn?
+- Optimize Keypoint R-CNN more
 - Create better data augmentation pipeline
+- Homography for post-processing

@@ -150,9 +150,10 @@ class TestComputeMPJPE:
         assert result["mpjpe"] == pytest.approx(0.0, abs=1e-5)
 
     def test_known_euclidean_distance(self):
-        """MPJPE of a 3-4-5 triangle is exactly 5.0."""
-        preds = torch.zeros(1, 1, 2)
-        targets = torch.tensor([[[3.0, 4.0]]])
+        """MPJPE of two identical 3-4-5 triangles is exactly 5.0."""
+        # Use B=1, K=2 so std() has 2 elements and doesn't warn.
+        preds = torch.zeros(1, 2, 2)
+        targets = torch.tensor([[[3.0, 4.0], [3.0, 4.0]]])
         result = compute_mpjpe(preds, targets)
         assert result["mpjpe"] == pytest.approx(5.0, abs=1e-5)
 
