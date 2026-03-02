@@ -9,12 +9,8 @@ class KeypointRCNN(nn.Module):
         super().__init__()
         self.num_kps = num_kps
         self.model = torchvision.models.detection.keypointrcnn_resnet50_fpn(
-            weights='DEFAULT',
+            weights="DEFAULT",
             num_classes=num_classes,
-            # Default is 0.05 — too high for an untrained/early-epoch model.
-            # Lower threshold so vis_testing and eval always get at least one
-            # detection candidate during training. A well-trained model will
-            # produce high-confidence detections regardless of this value.
             box_score_thresh=score_thresh,
         )
 

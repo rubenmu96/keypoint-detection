@@ -3,15 +3,15 @@ Court keypoint detection for tennis match footage. The model detects **14 keypoi
 
 | Model | Architecture | Output |
 |---|---|---|
-| `resnet` | ResNet-34 backbone + regression head | `[B, 28]` flat coordinates |
-| `heatmap` | ResNet-34 backbone + dilated conv + heatmap head | `[B, 14, H, W]` heatmaps |
+| `resnet` | ResNet backbone + regression head | `[B, 28]` flat coordinates |
+| `heatmap` | ResNet backbone + dilated conv + heatmap head | `[B, 14, H, W]` heatmaps |
 | `rcnn` | Keypoint R-CNN (ResNet-50 FPN) | list of detection dicts |
 
-The **heatmap model** (`resnet34` backbone) is the primary model. It produces one Gaussian heatmap per keypoint, extracts the argmax coordinate, and passes the result through a post-processing pipeline (confidence filtering, overlap removal, minimum keypoint count check).
+The **heatmap model** (with `resnet` as backbone) is the primary model. It produces one Gaussian heatmap per keypoint, extracts the argmax coordinate, and passes the result through a post-processing pipeline (confidence filtering, overlap removal, minimum keypoint count check).
 
 ---
 ### Dataset
-The dataset is taken from https://github.com/yastrebksv/TennisCourtDetector. In total there are 8841 images.
+The dataset is taken from https://github.com/yastrebksv/TennisCourtDetector. In total there are 8841 images, where 75% are training images and 25% are validation images.
 
 --- 
 ## Training
@@ -49,13 +49,13 @@ python inference.py \
 
 # Video (ONNX FP16, with FPS limiting to match source video)
 python inference.py \
-    --media "examples/tennis_match_shortened.mp4" \
+    --media "examples/tennis_match.mp4" \
     --model_folder "models/resnet34-hm/" \
     --use_onnx
 
 # Video (ONNX FP32)
 python inference.py \
-    --media "examples/tennis_match_shortened.mp4" \
+    --media "examples/tennis_match.mp4" \
     --model_folder "models/resnet34-hm/" \
     --use_onnx --fp32
 
@@ -68,11 +68,12 @@ python inference.py \
     --output_dir "predictions/"
 ```
 
+![](predictions/predictions.mp4)
 
 ## Future updates
 - Checkpoint training
 - Multiscale training
-- Batch inference for video
+- Video inference with batch size
 - Optimize Keypoint R-CNN more
-- Create better data augmentation pipeline
+- Create better data augmentation pipeline and try more augmentation techniques
 - Homography for post-processing

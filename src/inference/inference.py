@@ -334,8 +334,10 @@ class KeypointPredictor:
 
                 fps_text = f"Overall FPS: {overall_fps:.2f} | Inference FPS: {inference_fps:.2f}"
                 cv2.putText(frame_with_kps, fps_text, (10, 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                           cv2.FONT_HERSHEY_SIMPLEX, 1.25, (0, 255, 255), 2)
+                cv2.namedWindow('Keypoint detection', cv2.WINDOW_KEEPRATIO)
                 cv2.imshow("Keypoint detection", frame_with_kps)
+                cv2.resizeWindow('Keypoint detection', 800, 800)
 
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
