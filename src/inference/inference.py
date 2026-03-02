@@ -249,8 +249,8 @@ class KeypointPredictor:
                 x = max(0, min(x, image.shape[1] - 1))
                 y = max(0, min(y, image.shape[0] - 1))
                 cv2.putText(image, str(i//2), (x, y-10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                cv2.circle(image, (x, y), 5, (0, 0, 255), -1)
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.25, (0, 0, 255), 2)
+                cv2.circle(image, (x, y), 2, (0, 0, 255), -1)
 
         if not bgr and (save_path or show):
             plt.imshow(image)
@@ -334,10 +334,10 @@ class KeypointPredictor:
 
                 fps_text = f"Overall FPS: {overall_fps:.2f} | Inference FPS: {inference_fps:.2f}"
                 cv2.putText(frame_with_kps, fps_text, (10, 30), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 1.25, (0, 255, 255), 2)
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 255), 2)
                 cv2.namedWindow('Keypoint detection', cv2.WINDOW_KEEPRATIO)
                 cv2.imshow("Keypoint detection", frame_with_kps)
-                cv2.resizeWindow('Keypoint detection', 800, 800)
+                cv2.resizeWindow('Keypoint detection', 600, 800)
 
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break

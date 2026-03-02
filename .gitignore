@@ -3,11 +3,11 @@
 *.json
 dataset/tennis_court_det_dataset
 *.onnx
+*.mp4
 
 # Review gitignore
 test-images/
 models/
-examples/
 inf_speed_tester.py
 test.ipynb
 src/inference/inf_no_onnx.py

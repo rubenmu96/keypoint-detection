@@ -68,8 +68,11 @@ python inference.py \
     --output_dir "predictions/"
 ```
 
+Below are two videos displaying the results of ResNet34-heatmap. Second video shows that the post-processing is able to handle the camera moving. 
 
-<video src="/predictions/predictions.mp4" controls title="Tennis match" width="600"></video>
+![Tennis match predictions](examples/example1.gif)
+
+![Tennis match predictions](examples/example2.gif)
 
 
 ## Future updates
