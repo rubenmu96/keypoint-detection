@@ -68,7 +68,9 @@ python inference.py \
     --output_dir "predictions/"
 ```
 
-![](predictions/predictions.mp4)
+
+<video src="/predictions/predictions.mp4" controls title="Tennis match" width="600"></video>
+
 
 ## Future updates
 - Checkpoint training
