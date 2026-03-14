@@ -61,9 +61,11 @@ class KeypointPyTorch(Dataset):
 
     @staticmethod
     def _train_transform_rcnn(cfg, p=0.4):
-        # No A.Normalize — model expects [0, 1] float tensors.
-        # A.ToFloat(max_value=255) divides by 255 to get [0, 1] float32.
-        # ToTensorV2 then does HWC → CHW without any further scaling.
+        """
+        No A.Normalize — model expects [0, 1] float tensors.
+        A.ToFloat(max_value=255) divides by 255 to get [0, 1] float32.
+        ToTensorV2 then does HWC → CHW without any further scaling.
+        """
         return A.Compose([
             A.Resize(width=cfg.width, height=cfg.height),
             A.MotionBlur(blur_limit=3, p=0.2),

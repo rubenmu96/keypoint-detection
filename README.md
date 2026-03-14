@@ -9,6 +9,23 @@ Court keypoint detection for tennis match footage. The model detects **14 keypoi
 
 The **heatmap model** (with `resnet` as backbone) is the primary model. It produces one Gaussian heatmap per keypoint, extracts the argmax coordinate, and passes the result through a post-processing pipeline (confidence filtering, overlap removal, minimum keypoint count check).
 
+The ResNet heatmap model and Keypoint R-CNN both uses heatmaps to predict keypoints. At the keypoint location $(x_k^*, y_k^*)$ we have the value
+$$
+    \mathbf{H}_k(x, y) = \exp\!\left(-\frac{(x - x_k^*)^2 + (y - y_k^*)^2}{2\sigma^2}\right),
+$$
+where $\sigma$ controls the spread of the Gaussian. A small $\sigma$ will give us higher localization accuracy but will make optimziation harder. A larger $\sigma$ is more forgiving but less precise. 
+
+At inference time, the predicted keypoint location is recovered as the position of the maximum activation in the heatmap:
+$$
+    (\hat{x}_k, \hat{y}_k) = \arg \max_{(x,y)}\, \mathbf{H}_k(x, y).
+$$
+
+Read this: https://medium.com/@kosolapov.aetp/tennis-analysis-using-deep-learning-and-machine-learning-a5a74db7e2ee
+
+Accuracy metrics used to evalulate the models are PCK@0.10, PCK@0.05 and MPJPE (mean per joint position error). Although MPJPE is commonly used for 3D human pose estimation, we can apply here it also. 
+
+
+Change MPJPE to Euclidean distance between metric points instead. Seems like MPJPE is mainly for 3D pose estimation and not really applicable for 2D.
 ---
 ### Dataset
 The dataset is taken from https://github.com/yastrebksv/TennisCourtDetector. In total there are 8841 images, where 75% are training images and 25% are validation images.
