@@ -11,17 +11,13 @@ The **heatmap model** (with `resnet` as backbone) is the primary model. It produ
 
 The ResNet heatmap model and Keypoint R-CNN both uses heatmaps to predict keypoints. At the keypoint location $(x_k^*, y_k^*)$ we have the value
 
-$$
-    \mathbf{H}_k(x, y) = \exp\!\left(-\frac{(x - x_k^*)^2 + (y - y_k^*)^2}{2\sigma^2}\right),
-$$
+$$\mathbf{H}_k(x, y) = \exp\!\left(-\frac{(x - x_k^*)^2 + (y - y_k^*)^2}{2\sigma^2}\right),$$
 
 where $\sigma$ controls the spread of the Gaussian. A small $\sigma$ will give us higher localization accuracy but will make optimziation harder. A larger $\sigma$ is more forgiving but less precise. 
 
 At inference time, the predicted keypoint location is recovered as the position of the maximum activation in the heatmap:
 
-$$
-    (\hat{x}_k, \hat{y}_k) = \arg \max_{(x,y)}\, \mathbf{H}_k(x, y).
-$$
+$$(\hat{x}_k, \hat{y}_k) = \arg \max_{(x,y)}\, \mathbf{H}_k(x, y).$$
 
 Read this: https://medium.com/@kosolapov.aetp/tennis-analysis-using-deep-learning-and-machine-learning-a5a74db7e2ee
 
