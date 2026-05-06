@@ -1,4 +1,6 @@
+import os
 import time
+
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -7,7 +9,6 @@ import cv2
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 import matplotlib.pyplot as plt
-import os
 
 from src.core import compute_loss, compute_accuracy
 from src.utils import (
@@ -19,20 +20,16 @@ from src.utils import (
 
 class Trainer:
     def __init__(
-            self, cfg, model, optimizer, criterion, scheduler=None, scaler=None, use_amp=False
+            self, cfg, model, optimizer, scheduler=None, scaler=None, use_amp=False
         ):
         self.cfg = cfg
         self.model = model
         self.optimizer = optimizer
-        self.criterion = criterion
         self.scheduler = scheduler
         self.device = cfg.device
         self.model_name = cfg.model_name
         self.folder = self.cfg.folder
-        # KeypointRCNN's loss_keypoint (~8.0 at init) consistently overflows
-        # in FP16, driving the GradScaler's scale to 0 within one epoch.
-        # bfloat16 would be the correct alternative but requires Ampere+ GPUs.
-        # For now, RCNN always trains in FP32 regardless of the use_amp flag.
+        # Keypoint R-CNN will use FP32.
         rcnn = cfg.model_name == "KeypointRCNN"
         amp_active = use_amp and not rcnn
         self.scaler = torch.amp.GradScaler('cuda', enabled=amp_active)
@@ -107,7 +104,7 @@ class Trainer:
                     loss = sum(loss for loss in outputs.values())
                 else:
                     outputs = self.model(img)
-                    loss = compute_loss(self.cfg, self.criterion, outputs, kps)
+                    loss = compute_loss(self.cfg, outputs, kps)
             times["forward"] += time.time() - start
             
             start = time.time()
@@ -169,6 +166,7 @@ class Trainer:
             
             start = time.time()
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
+                # TODO: Look more into this.
                 # KeypointRCNN must NOT receive targets in eval mode — it returns
                 # prediction dicts instead of a loss dict when targets are absent.
                 # For all other models, targets are not part of the forward pass.
@@ -177,7 +175,7 @@ class Trainer:
             times['forward'] += time.time() - start
             
             start = time.time()
-            loss = compute_loss(self.cfg, self.criterion, outputs, kps)
+            loss = compute_loss(self.cfg, outputs, kps)
             times['loss_compute'] += time.time() - start
             
             losses.append(loss)
@@ -287,6 +285,7 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
         os.makedirs(folder_path)
 
     def draw_keypoints(image, keypoints):
+        """Draw keypoints on an image."""
         if keypoints.ndim == 2:
             keypoints = keypoints.flatten()
 
@@ -311,23 +310,23 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
             A.Normalize(mean=cfg.mean, std=cfg.std),
             ToTensorV2(p=1.0),
         ])
+    
+    # Get image and apply transformation
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     original_h, original_w = image.shape[:2]
     image_tensor = transform(image=image)["image"].unsqueeze(0)
 
-    image_tensor = image_tensor.to(cfg.device)
-
+    # Inference on image
     model.eval()
     with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
-        outputs = model(image_tensor)
+        outputs = model(image_tensor.to(cfg.device))
 
     if cfg.model_name == "ResNetHeatmap":
         outputs = extract_keypoints(outputs)
         keypoints = outputs.cpu().numpy()[0]
         keypoints = keypoint_unscaler(cfg, keypoints, original_w, original_h)
     elif cfg.model_name == "KeypointRCNN":
-        # outputs is a list of dicts; grab keypoints from the first (and only) image
         # Shape: [num_instances, num_keypoints, 3] — x, y, visibility
         scores = outputs[0]["scores"]
         if scores.numel() == 0:
@@ -335,8 +334,7 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
             return
         kps = outputs[0]["keypoints"]  # (N, K, 3)
         best = scores.argmax()
-        # RCNN outputs are already in pixel coords at model input resolution;
-        # scale to original image size.
+
         kps_best = kps[best, :, :2].cpu().numpy()  # (K, 2)
         keypoints = scale_keypoints_to_original(
             kps_best, cfg.width, cfg.height, original_w, original_h

@@ -86,7 +86,7 @@ def num_kps_req(keypoints, num_kps=7, required_indices=None):
     if not failed and required_indices is not None:
         n = len(keypoints)
         for idx in required_indices:
-            if not valid_mask[idx % n]:  # support negative indices
+            if not valid_mask[idx % n]:
                 failed = True
                 break
 
@@ -112,7 +112,7 @@ def process_heatmap_keypoints(
         num_kps=7, image_width=None, image_height=None
     ):
     """
-    Complete pipeline for processing a batch of heatmaps into filtered keypoints.
+    Pipeline for processing a batch of heatmaps into filtered keypoints during inference.
     """
     # Turn heatmap into keypoints
     keypoints, max_values = extract_keypoints(keypoints, return_max_values=True)

@@ -196,6 +196,7 @@ class TestComputeLossHeatmap:
     def _cfg(self):
         cfg = _Cfg()
         cfg.model_name = "ResNetHeatmap"
+        cfg.criterion = "bcelogitloss"
         return cfg
 
     def test_perfect_preds_lower_loss_than_random(self):
@@ -209,8 +210,8 @@ class TestComputeLossHeatmap:
         preds_good = create_heatmap(targets_kps, (H, W), sigma=cfg.sigma)
         preds_bad  = torch.rand_like(preds_good)
 
-        loss_good = compute_loss(cfg, "bcelogitloss", preds_good, targets_kps)
-        loss_bad  = compute_loss(cfg, "bcelogitloss", preds_bad,  targets_kps)
+        loss_good = compute_loss(cfg, preds_good, targets_kps)
+        loss_bad  = compute_loss(cfg, preds_bad,  targets_kps)
         assert loss_good.item() < loss_bad.item()
 
     def test_returns_scalar_tensor(self):
@@ -219,7 +220,7 @@ class TestComputeLossHeatmap:
         B, K, H, W = 2, 7, 56, 84
         targets_kps = torch.rand(B, K * 2)
         preds = torch.rand(B, K, H, W)
-        loss = compute_loss(cfg, "bcelogitloss", preds, targets_kps)
+        loss = compute_loss(cfg, preds, targets_kps)
         assert loss.shape == torch.Size([])
 
     def test_loss_is_non_negative(self):
@@ -228,14 +229,15 @@ class TestComputeLossHeatmap:
         B, K, H, W = 2, 7, 56, 84
         preds = torch.randn(B, K, H, W)
         targets_kps = torch.rand(B, K * 2)
-        loss = compute_loss(cfg, "bcelogitloss", preds, targets_kps)
+        loss = compute_loss(cfg, preds, targets_kps)
         assert loss.item() >= 0.0
 
     def test_unknown_model_raises_value_error(self):
         cfg = self._cfg()
         cfg.model_name = "ThisModelDoesNotExist"
         with pytest.raises(ValueError, match="Unknown model"):
-            compute_loss(cfg, "mseloss", torch.rand(2, 14), torch.rand(2, 14))
+            cfg.loss = "mseloss"
+            compute_loss(cfg, torch.rand(2, 14), torch.rand(2, 14))
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +257,7 @@ class TestCalculateKeypointLoss:
         K = 7
         pred   = _make_kps_dict(100.0, K=K)
         target = _make_kps_dict(100.0, K=K)
-        loss = _calculate_keypoint_loss([pred], [target], None, K)
+        loss = _calculate_keypoint_loss([pred], [target])
         assert loss.item() == pytest.approx(0.0, abs=1e-5)
 
     def test_non_zero_loss_when_preds_differ(self):
@@ -263,7 +265,7 @@ class TestCalculateKeypointLoss:
         K = 7
         pred   = _make_kps_dict(0.0,   K=K)
         target = _make_kps_dict(100.0, K=K)
-        loss = _calculate_keypoint_loss([pred], [target], None, K)
+        loss = _calculate_keypoint_loss([pred], [target])
         assert loss.item() > 0.0
 
     def test_occluded_keypoints_excluded_from_loss(self):
@@ -283,9 +285,6 @@ class TestCalculateKeypointLoss:
         loss = _calculate_keypoint_loss(
             [{"keypoints": pred_kps}],
             [{"keypoints": tgt_kps}],
-            criterion=None,
-            num_kps=K,
-            use_visibility_mask=True,
             visibility_threshold=0,
         )
         assert loss.item() == pytest.approx(0.0, abs=1e-5)
@@ -296,7 +295,7 @@ class TestCalculateKeypointLoss:
         pred   = {"keypoints": torch.zeros(0, K, 3)}   # empty
         target = {"keypoints": torch.zeros(1, K, 3)}
         with pytest.warns(RuntimeWarning, match="no valid detections"):
-            _calculate_keypoint_loss([pred], [target], None, K)
+            _calculate_keypoint_loss([pred], [target])
 
     def test_empty_detection_returns_zero(self):
         """Even with zero detections the function returns a finite 0.0."""
@@ -305,7 +304,7 @@ class TestCalculateKeypointLoss:
         target = {"keypoints": torch.zeros(1, K, 3)}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
-            loss = _calculate_keypoint_loss([pred], [target], None, K)
+            loss = _calculate_keypoint_loss([pred], [target])
         assert loss.item() == pytest.approx(0.0, abs=1e-5)
 
     def test_batch_averages_over_valid_images(self):
@@ -321,7 +320,7 @@ class TestCalculateKeypointLoss:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             loss_mixed = _calculate_keypoint_loss(
-                [pred0, pred1], [target0, target1], None, K
+                [pred0, pred1], [target0, target1],
             )
-        loss_single = _calculate_keypoint_loss([pred0], [target0], None, K)
+        loss_single = _calculate_keypoint_loss([pred0], [target0])
         assert loss_mixed.item() == pytest.approx(loss_single.item(), abs=1e-5)

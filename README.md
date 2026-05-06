@@ -22,13 +22,33 @@ $$
 
 Read this: https://medium.com/@kosolapov.aetp/tennis-analysis-using-deep-learning-and-machine-learning-a5a74db7e2ee
 
-Accuracy metrics used to evalulate the models are PCK@0.10, PCK@0.05 and MPJPE (mean per joint position error). Although MPJPE is commonly used for 3D human pose estimation, we can apply here it also. 
+### Metrics
+Accuracy metrics used to evalulate the models are PCK@0.10, PCK@0.05 and MPJPE. PCK stands for **percentage of correct keypoints** and MPJPE stands for **mean per joint position error**. MPJPE is mainly used for 3D human pose estimation, but can be used in 2D also by calculating the pixel-wise distance. 
+$$
+    \text{MPJPE}_{2\text{D}} = \frac{1}{K} \sum_{k=1}^K \sqrt{(x_k - \hat{x}_k)(y_k - \hat{y}_k^*)}
+$$
+PCK also used the Euclidean distance, but is normalized by the image diagonal. Then given a threshold, we count how many normalized distances are within the threshold. 
 
 
-Change MPJPE to Euclidean distance between metric points instead. Seems like MPJPE is mainly for 3D pose estimation and not really applicable for 2D.
 ---
 ### Dataset
 The dataset is taken from https://github.com/yastrebksv/TennisCourtDetector. In total there are 8841 images, where 75% are training images and 25% are validation images.
+
+The dataset is a JSON-annotated collection of tennis broadcast frames. Each record contains:
+
+- `id` — image filename stem (image file is `<img_dir>/<id>.png`)
+- `kps` — list of `[x, y]` pixel coordinates, one pair per keypoint (14 keypoints = 28 values)
+
+Expected layout:
+
+```
+dataset/tennis_court_det_dataset/data/
+├── data_train.json
+├── data_val.json
+└── images/
+    ├── <id>.png
+    └── ...
+```
 
 --- 
 ## Training
@@ -51,6 +71,9 @@ python main.py --name rcnn --num_workers 4
 ## Inference
 
 The `inference.py` entry point accepts an image, a video file, or a folder of images. The input type is detected automatically from the file extension.
+
+
+TODO: put the sample images under examples
 
 ```bash
 # Single image (PyTorch FP16)

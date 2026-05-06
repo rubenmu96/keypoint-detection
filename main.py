@@ -28,6 +28,7 @@ from src.trainer import (
 )
 
 def main(args, use_amp):
+    # Get model and config
     model, cfg = get_model_and_config(args.name)
     cfg = update_cfg_from_args(cfg, args)
 
@@ -37,7 +38,7 @@ def main(args, use_amp):
     collate_fn = CollateFunction(cfg.model_name)
 
     # Get keypoint dataset
-    train_data, valid_data = KeypointData(cfg, cfg.clean_dataset).get_data(cfg.model_name)
+    train_data, valid_data = KeypointData(cfg, cfg.clean_dataset).get_data()
 
     train_loader = DataLoader(
         dataset=train_data,
@@ -82,7 +83,6 @@ def main(args, use_amp):
         cfg=cfg,
         model=model,
         optimizer=optimizer,
-        criterion=cfg.criterion,
         scheduler=scheduler,
         use_amp=use_amp
     )

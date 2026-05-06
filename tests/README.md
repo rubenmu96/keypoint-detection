@@ -1,13 +1,10 @@
-# Testing
+# Testing of code
 
 #### Note: Tests are created based on instructions by Claude AI with some modifications.
 
-Run all tests with:
-```
-poetry run pytest
-```
+Run all tests with: ```poetry run pytest```
 
-84 tests across 4 files. All tests run on CPU with no dataset or pretrained weights required.
+There are 84 tests across 4 files. All tests run on CPU with no dataset or pretrained weights required.
 
 ---
 

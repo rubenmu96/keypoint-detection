@@ -85,8 +85,6 @@ if __name__ == "__main__":
 
     python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/keypoint-rcnn/" --fp32
     python inference.py --media "dataset/sample_images" --model_folder "models/keypoint-rcnn" --fp32
-
-
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--media', type=str, help="Path to media (image or video)")

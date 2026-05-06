@@ -1,7 +1,3 @@
-"""
-Calculation of loss and accurcay metrics
-
-"""
 import warnings
 
 import numpy as np
@@ -9,9 +5,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.utils import extract_keypoints
-from src.utils import create_heatmap, keypoint_unscaler
-
+from src.utils import (
+    extract_keypoints,
+    create_heatmap,
+    keypoint_unscaler
+)
 
 loss_dictionary = {
     "bcelogitloss": nn.BCEWithLogitsLoss(),
@@ -25,33 +23,14 @@ loss_dictionary = {
 def _calculate_keypoint_loss(
     pred_kps,
     target_kps,
-    criterion,
-    num_kps,
-    use_visibility_mask=True,
     visibility_threshold=0,  # 0=not labeled, 1=occluded, 2=visible
 ):
     """
-    Calculate keypoint loss with proper visibility masking and multi-object support.
-
-    Called in two distinct contexts:
-
-    * Training — ``pred_kps`` is the loss dict returned by torchvision KeypointRCNN
-      when targets are supplied. This function is NOT called in that path; the
-      training branch in ``_train`` sums the dict values directly.
-    * Validation — ``pred_kps`` is a list of prediction dicts produced by
-      KeypointRCNN in eval mode, each with shape ``[N_pred, K, 3]`` in pixel
-      coords. ``target_kps`` is the corresponding list of dataset target dicts,
-      each with ``"keypoints"`` of shape ``[1, K, 3]`` also in pixel coords.
-      Pairing the highest-scoring prediction (index 0 after torchvision's
-      score-sorted output) against the single ground-truth instance is correct
-      for single-instance datasets.
+    Calculate keypoint loss with visibility masking and multi-object support.
 
     Args:
         pred_kps: List of prediction dicts with 'keypoints' tensor of shape [N_pred, K, 3]
         target_kps: List of target dicts with 'keypoints' tensor of shape [N_target, K, 3]
-        criterion: Loss function to use (used only when use_visibility_mask=False)
-        num_kps: Number of keypoints
-        use_visibility_mask: Whether to mask loss by visibility flags
         visibility_threshold: Minimum visibility value to include in loss
 
     Returns:
@@ -67,43 +46,36 @@ def _calculate_keypoint_loss(
         pred = pred_dict["keypoints"]    # [N_pred, K, 3]
         target = target_dict["keypoints"]  # [N_target, K, 3]
 
-        # Skip images where the model made no detections.
         if pred.shape[0] == 0 or target.shape[0] == 0:
             continue
 
-        # Pair each ground-truth instance with the best-matching prediction.
-        # torchvision returns predictions sorted by descending score, so index 0
-        # is the highest-confidence detection — the right choice for the
-        # single-instance case.  For multi-instance datasets a proper assignment
-        # algorithm (e.g. Hungarian matching on IoU) would be needed here.
+        """
+        Pair each ground-truth instance with the best-matching prediction.
+        torchvision returns predictions sorted by descending score, so index 0
+        is the highest-confidence detection, the right choice for the
+        single-instance case. For multi-instance datasets a proper assignment
+        algorithm (e.g. Hungarian matching on IoU) would be needed here.
+        """
         num_objects = min(pred.shape[0], target.shape[0])
 
         pred_coords = pred[:num_objects, :, :2].float()    # [N, K, 2]
         target_coords = target[:num_objects, :, :2].float()  # [N, K, 2]
         target_visibility = target[:num_objects, :, 2]     # [N, K]
 
-        if use_visibility_mask:
-            visibility_mask = (target_visibility > visibility_threshold).float()  # [N, K]
+        visibility_mask = (target_visibility > visibility_threshold).float()  # [N, K]
+        per_kp_loss = F.mse_loss(pred_coords, target_coords, reduction='none')  # [N, K, 2]
+        per_kp_loss = per_kp_loss.mean(dim=-1)  # [N, K]
 
-            per_kp_loss = F.mse_loss(pred_coords, target_coords, reduction='none')  # [N, K, 2]
-            per_kp_loss = per_kp_loss.mean(dim=-1)  # [N, K]
+        masked_loss = per_kp_loss * visibility_mask
 
-            masked_loss = per_kp_loss * visibility_mask
-
-            num_valid = visibility_mask.sum()
-            if num_valid > 0:
-                total_loss += masked_loss.sum() / num_valid
-                valid_count += 1
-        else:
-            total_loss += criterion(pred_coords, target_coords)
+        num_valid = visibility_mask.sum()
+        if num_valid > 0:
+            total_loss += masked_loss.sum() / num_valid
             valid_count += 1
 
     if valid_count == 0:
-        # Every image in this batch had zero detections.  Returning 0.0 would
-        # make the loss look perfect; instead warn so the caller can decide.
         warnings.warn(
-            "KeypointRCNN: no valid detections in this batch — loss is 0.0 "
-            "and does not reflect model quality.",
+            "KeypointRCNN: no valid detections in this batch — loss is set to 0.0",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -111,48 +83,51 @@ def _calculate_keypoint_loss(
     return total_loss / max(valid_count, 1)
 
 
-def compute_loss(cfg, criterion, preds, targets):
+def compute_loss(cfg, preds, targets):
     """Compute the loss"""
+    criterion_fn = loss_dictionary[cfg.criterion]
+
     if cfg.model_name == "ResNetHeatmap":
-        criterion_fn = loss_dictionary[criterion]
         targets = create_heatmap(
             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
         )
         return criterion_fn(preds, targets)
     
-    elif cfg.model_name == "KeypointRCNN":        
-        num_kps = getattr(cfg, 'num_kps', 14)
-        
-        criterion_fn = loss_dictionary.get(criterion, nn.MSELoss())
-        return _calculate_keypoint_loss(
-            preds, targets, 
-            criterion=criterion_fn,
-            num_kps=num_kps,
-            use_visibility_mask=True
-        )
+    elif cfg.model_name == "KeypointRCNN":
+        return _calculate_keypoint_loss(preds, targets)
     
     elif cfg.model_name == "ResNetKeypoint":
-        criterion_fn = loss_dictionary[criterion]
         return criterion_fn(preds, targets)
     
     else:
         raise ValueError(f"Unknown model: {cfg.model_name}")
 
-def compute_pck(
-    preds,
-    targets,
-    image_size,
-    threshold=0.05,
-):
+def compute_pck(preds, targets, image_size, threshold=0.05):
     """
     PCK (Percentage of Correct Keypoints).
 
     A keypoint is "correct" if its Euclidean distance to the ground-truth is
-    within `threshold * diag` pixels, where `diag = sqrt(H^2 + W^2)` is the
+    within `threshold * diag` pixels, where diag = sqrt(H^2 + W^2) is the
     image diagonal used as the normalizer.  Normalizing by the diagonal makes
     the threshold scale-invariant across different image resolutions.
 
     PCK@0.05 means threshold = 5 % of the image diagonal.
+
+    A bigger value is better, between 0-1.
+
+    Args:
+        preds: Predicted keypoint coordinates, shape [B, K, 2] or [B, K*2].
+        targets: Ground-truth keypoint coordinates, same shape as preds.
+        image_size: (height, width) of the image used to compute the diagonal
+            normalizer.
+        threshold: Distance threshold as a fraction of the image diagonal.
+
+    Returns:
+        dict with keys:
+            'pck' (float): Mean fraction of correct keypoints across the batch.
+            'pck_per_keypoint' (np.ndarray, shape [K]): Per-keypoint PCK.
+            'num_correct' (float): Total correct keypoint predictions.
+            'num_total' (int): Total keypoint predictions (B * K).
     """
     # Reshape to [B, K, 2] if flattened
     if preds.ndim == 2:
@@ -187,17 +162,25 @@ def compute_pck(
         "num_total": batch_size * num_keypoints,
     }
 
-def compute_mpjpe(
-    preds,
-    targets,
-):
+def compute_mpjpe(preds, targets):
     """
     MPJPE (Mean Per-Joint Position Error).
 
     For each keypoint the Euclidean distance between prediction and ground-truth
     is computed, then averaged across all keypoints and all samples in the batch.
     Reported in pixels (at the unscaled / original image resolution).
-    Lower is better.
+
+    A lower value is better.
+
+    Args:
+        preds: Predicted keypoint coordinates, shape [B, K, 2] or [B, K*2].
+        targets: Ground-truth keypoint coordinates, same shape as preds.
+
+    Returns:
+        dict with keys:
+            'mpjpe' (float): Mean error in pixels across all keypoints and samples.
+            'mpjpe_per_keypoint' (np.ndarray, shape [K]): Per-keypoint mean error.
+            'std' (float): Standard deviation of per-keypoint distances.
     """
     if preds.ndim == 2:
         preds = preds.view(preds.shape[0], -1, 2)
@@ -220,8 +203,26 @@ def compute_mpjpe(
         "std": distances.std().item(),
     }
 
-def compute_accuracy(cfg, preds, targets, image_size=None):
-    """Compute accuracy metrics for keypoint models"""
+def compute_accuracy(cfg, preds, targets, image_size=None, thresholds=[0.05, 0.10]):
+    """
+    Compute accuracy metrics for keypoint detection models.
+
+    Args:
+        cfg: Config object with model_name, height, width, and scaler settings.
+        preds: Model predictions. Shape depends on model — heatmap tensor for
+            ResNetHeatmap, flat/shaped keypoint tensor for ResNetKeypoint, or a
+            list of dicts with 'keypoints' of shape [N, K, 3] for KeypointRCNN.
+        targets: Ground-truth keypoints in the same format as preds.
+        image_size: (height, width) of the original image used as the PCK
+            normalizer. Falls back to (cfg.height, cfg.width) when None.
+        thresholds: PCK distance thresholds as fractions of the image diagonal.
+            Defaults to [0.05, 0.10].
+
+    Returns:
+        dict with keys "mpjpe" (float, pixels) and "pck@{thr}" (float, 0–1)
+        for each threshold. Returns mpjpe=inf and pck=0.0 for all thresholds
+        when KeypointRCNN produces no detections in the batch.
+    """
     if cfg.model_name == "ResNetHeatmap":
         preds = extract_keypoints(preds)
 
@@ -235,7 +236,11 @@ def compute_accuracy(cfg, preds, targets, image_size=None):
                 target_coords.append(target_dict["keypoints"][0, :, :2])
         
         if not pred_coords:
-            return {"pck@0.05": 0.0, "pck@0.1": 0.0, "mpjpe": float('inf')}
+            metrics = {}
+            metrics["mpjpe"] = float("inf")
+            for thr in thresholds:
+                metrics[f"pck@{thr}"] = 0.0
+            return metrics
         
         preds = torch.stack(pred_coords)
         targets = torch.stack(target_coords)
@@ -250,13 +255,12 @@ def compute_accuracy(cfg, preds, targets, image_size=None):
         preds = keypoint_unscaler(cfg, preds, orig_width=w, orig_height=h)
         targets = keypoint_unscaler(cfg, targets, orig_width=w, orig_height=h)
 
+    metrics = {}
+    metrics["mpjpe"] = compute_mpjpe(preds, targets)["mpjpe"]
+    
+    for thr in thresholds:
+        metrics[f"pck@{thr}"] = compute_pck(
+            preds, targets, image_size=(h, w), threshold=thr
+        )["pck"]
 
-    normalizer = np.sqrt(h**2 + w**2)
-    normalized_distances = torch.norm(preds.float() - targets.float(), dim=-1) / normalizer
-    mpjpe_results = compute_mpjpe(preds, targets)
-
-    return {
-        "pck@0.05": (normalized_distances <= 0.05).float().mean().item(),
-        "pck@0.1": (normalized_distances <= 0.1).float().mean().item(),
-        "mpjpe": mpjpe_results["mpjpe"],
-    }
+    return metrics

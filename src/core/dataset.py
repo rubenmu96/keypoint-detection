@@ -49,7 +49,7 @@ class KeypointPyTorch(Dataset):
             A.RandomGamma(p=p),
             A.Normalize(mean=cfg.mean, std=cfg.std),
             ToTensorV2(p=1.0),
-            ], keypoint_params=A.KeypointParams(format="xy"))
+        ], keypoint_params=A.KeypointParams(format="xy"))
 
     @staticmethod
     def _val_transform(cfg):
@@ -57,7 +57,7 @@ class KeypointPyTorch(Dataset):
             A.Resize(width=cfg.width, height=cfg.height),
             A.Normalize(mean=cfg.mean, std=cfg.std),
             ToTensorV2(p=1.0),
-            ], keypoint_params=A.KeypointParams(format="xy"))
+        ], keypoint_params=A.KeypointParams(format="xy"))
 
     @staticmethod
     def _train_transform_rcnn(cfg, p=0.4):
@@ -82,16 +82,17 @@ class KeypointPyTorch(Dataset):
             A.Resize(width=cfg.width, height=cfg.height),
             A.ToFloat(max_value=255),
             ToTensorV2(p=1.0),
-            ], keypoint_params=A.KeypointParams(format="xy"))
-
-    def __len__(self):
-        return len(self.data)
+        ], keypoint_params=A.KeypointParams(format="xy"))
     
-    def clip_kps(self, kps, width, height):
+    @staticmethod
+    def clip_kps(kps, width, height):
         kps = kps.copy()
         kps[:, 0] = np.clip(kps[:, 0], 0, width - 1)
         kps[:, 1] = np.clip(kps[:, 1], 0, height - 1)
         return kps
+
+    def __len__(self):
+        return len(self.data)
 
     def __getitem__(self, idx):
         item = self.data.iloc[idx]
@@ -166,7 +167,7 @@ class KeypointData:
         
         return df.loc[mask]
     
-    def get_data(self, model_name):
+    def get_data(self):
         train, valid = self.train_data, self.valid_data
 
         # clean_keypoints filters rows whose keypoints fall outside the actual
