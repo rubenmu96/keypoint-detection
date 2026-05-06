@@ -17,15 +17,15 @@ where $\sigma$ controls the spread of the Gaussian. A small $\sigma$ will give u
 
 At inference time, the predicted keypoint location is recovered as the position of the maximum activation in the heatmap:
 
-$$(\hat{x}_k, \hat{y}_k) = \arg \max_{(x,y)}\, \mathbf{H}_k(x, y).$$
+$$(\hat{x}_k, \hat{y}_k) = \arg \max_{(x,y)} \mathbf{H}_k(x, y).$$
 
 Read this: https://medium.com/@kosolapov.aetp/tennis-analysis-using-deep-learning-and-machine-learning-a5a74db7e2ee
 
 ### Metrics
 Accuracy metrics used to evalulate the models are PCK@0.10, PCK@0.05 and MPJPE. PCK stands for **percentage of correct keypoints** and MPJPE stands for **mean per joint position error**. MPJPE is mainly used for 3D human pose estimation, but can be used in 2D also by calculating the pixel-wise distance. 
-$$
-    \text{MPJPE}_{2\text{D}} = \frac{1}{K} \sum_{k=1}^K \sqrt{(x_k - \hat{x}_k)(y_k - \hat{y}_k^*)}
-$$
+
+$$ \text{MPJPE}_{2\text{D}} = \frac{1}{K} \sum_{k=1}^K \sqrt{(x_k - \hat{x}_k^\star)(y_k - \hat{y}_k^\star)} $$
+
 PCK also used the Euclidean distance, but is normalized by the image diagonal. Then given a threshold, we count how many normalized distances are within the threshold. 
 
 
