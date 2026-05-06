@@ -9,9 +9,9 @@ Court keypoint detection for tennis match footage. The model detects **14 keypoi
 
 The **heatmap model** (with `resnet` as backbone) is the primary model. It produces one Gaussian heatmap per keypoint, extracts the argmax coordinate, and passes the result through a post-processing pipeline (confidence filtering, overlap removal, minimum keypoint count check).
 
-The ResNet heatmap model and Keypoint R-CNN both uses heatmaps to predict keypoints. At the keypoint location $(x_k^*, y_k^*)$ we have the value
+The ResNet heatmap model and Keypoint R-CNN both uses heatmaps to predict keypoints. At the keypoint location $(x_k^\star, y_k^\star)$ we have the value
 
-$$\mathbf{H}_k(x, y) = \exp\!\left(-\frac{(x - x_k^*)^2 + (y - y_k^*)^2}{2\sigma^2}\right),$$
+$$\mathbf{H}_k(x, y) = \exp \left(-\frac{(x - x_{k}^\star)^2 + (y - y_{k}^\star)^2}{2\sigma^2}\right),$$
 
 where $\sigma$ controls the spread of the Gaussian. A small $\sigma$ will give us higher localization accuracy but will make optimziation harder. A larger $\sigma$ is more forgiving but less precise. 
 
