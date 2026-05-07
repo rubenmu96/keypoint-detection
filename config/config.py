@@ -42,8 +42,8 @@ class BaseConfig:
     # if not same length as sample_images_path, will use img_i instead as image name
     display_names = ["clay", "fed", "synframe", "synthetic"] # optional 
     images = (
-        glob.glob(os.path.join("dataset/sample_images/", '*.jpg')) + 
-        glob.glob(os.path.join("dataset/sample_images/", '*.png'))
+        glob.glob(os.path.join("examples/test-images/", '*.jpg')) + 
+        glob.glob(os.path.join("examples/test-images/", '*.png'))
     )
     sample_image_path = images[:4] # limit to first 4 images
 

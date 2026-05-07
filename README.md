@@ -1,5 +1,5 @@
 # Keypoint detection
-Court keypoint detection for tennis match footage. The model detects **14 keypoints** — 7 per half of the court. Three model architectures are supported with a shared training and inference pipeline:
+Court keypoint detection for tennis match footage. The model detects **14 keypoints**, 7 per half of the court. Three model architectures are supported with a shared training and inference pipeline:
 
 | Model | Architecture | Output |
 |---|---|---|
@@ -115,9 +115,12 @@ Below are two videos displaying the results of ResNet34-heatmap. Second video sh
 
 
 ## Future updates
-- Checkpoint training
-- Multiscale training
-- Video inference with batch size
-- Optimize Keypoint R-CNN more
-- Create better data augmentation pipeline and try more augmentation techniques
-- Homography for post-processing
+&#x2610; Checkpoint training
+
+&#x2610; Multiscale training
+
+&#x2610; Optimize Keypoint R-CNN more
+
+&#x2610; Create better data augmentation pipeline and try more augmentation techniques
+
+&#x2610;Homography for post-processing

@@ -29,7 +29,7 @@ class Trainer:
         self.device = cfg.device
         self.model_name = cfg.model_name
         self.folder = self.cfg.folder
-        # Keypoint R-CNN will use FP32.
+        # Note that Keypoint R-CNN will use FP32.
         rcnn = cfg.model_name == "KeypointRCNN"
         amp_active = use_amp and not rcnn
         self.scaler = torch.amp.GradScaler('cuda', enabled=amp_active)
@@ -109,9 +109,8 @@ class Trainer:
             
             start = time.time()
             self.scaler.scale(loss).backward()
-            # Unscale before clipping so the clip threshold is in real gradient units.
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0) # add max_norm to config?
             times["backward"] += time.time() - start
 
             start = time.time()
@@ -166,10 +165,6 @@ class Trainer:
             
             start = time.time()
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
-                # TODO: Look more into this.
-                # KeypointRCNN must NOT receive targets in eval mode — it returns
-                # prediction dicts instead of a loss dict when targets are absent.
-                # For all other models, targets are not part of the forward pass.
                 assert not self.model.training, "_evaluate called with model in train mode"
                 outputs = self.model(img)
             times['forward'] += time.time() - start
@@ -193,7 +188,6 @@ class Trainer:
             })
             start = time.time()
         
-        # Single synchronization at the end
         avg_loss = torch.stack(losses).mean().item()
         avg_pck = np.mean(all_pck)
         avg_mpjpe = np.mean(all_mpjpe)
@@ -265,7 +259,6 @@ class Trainer:
                 print("Early stopping triggered.")
                 break
             
-            # Update metrics for epoch
             output_path = os.path.join(self.folder, "tracking.csv")
             metrics = {
                 "training": train_metrics,
@@ -276,11 +269,10 @@ class Trainer:
             epoch_metrics.append(metrics)
             df = pd.DataFrame(epoch_metrics)
             df.to_csv(output_path, index=False)
-        
-        return epoch_metrics
     
 @torch.no_grad()
 def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-images/"):
+    """Visualize sample images during training."""
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 

@@ -81,7 +81,7 @@ if __name__ == "__main__":
     python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/resnet18-hm/" --use_onnx
     python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/resnet18-hm/" --use_onnx --fp32
     python inference.py --media "dataset/sample_images/clay.jpg" --model_folder "models/resnet18-hm/" --use_onnx
-    python inference.py --media "dataset/sample_images/" --model_folder "models/resnet18-hm/" --use_onnx
+    python inference.py --media "examples/test-images/" --model_folder "models/resnet18-hm/" --use_onnx
 
     python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/keypoint-rcnn/" --fp32
     python inference.py --media "dataset/sample_images" --model_folder "models/keypoint-rcnn" --fp32

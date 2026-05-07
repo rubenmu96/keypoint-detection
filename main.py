@@ -77,8 +77,6 @@ def main(args, use_amp):
     with open(f'{cfg.folder}/{args.name}_config.json', 'w') as f:
         json.dump(config_dict, f, indent=4)
 
-    print("Config is saved")
-
     train = Trainer(
         cfg=cfg,
         model=model,
@@ -87,7 +85,7 @@ def main(args, use_amp):
         use_amp=use_amp
     )
 
-    history = train.train(train_loader, valid_loader)
+    train.train(train_loader, valid_loader)
 
     folder = os.path.join(cfg.folder, "")
     if cfg.onnx:
@@ -109,7 +107,7 @@ if __name__ == "__main__":
     Be careful with num_workers on Windows, num_workers > 0 might give unpredictable results or not work.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, default="rcnn", help="resnet, heatmap, or rcnn") # find a different name?
+    parser.add_argument('--name', type=str, default="rcnn", help="resnet, heatmap, or rcnn")
     parser.add_argument('--fp32', action="store_true", help="Use FP32 instead of FP16")
     parser.add_argument('--num_workers', type=int, default=0, help="Number of workers")
     args = parser.parse_args()

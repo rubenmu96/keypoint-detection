@@ -6,7 +6,6 @@ dataset/tennis_court_det_dataset
 *.mp4
 
 # Review gitignore
-test-images/
 models/
 inf_speed_tester.py
 test.ipynb
