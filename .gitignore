@@ -1,15 +1,20 @@
+# Folders
+dataset/tennis_court_det_dataset
+predictions/
+models/
+src/inference/inf_no_onnx.py
+src/inference/inference_autocast.py
+
+
+# Specific file types
 *.pyc
 *.pth
 *.json
-dataset/tennis_court_det_dataset
 *.onnx
 *.mp4
 
-# Review gitignore
-models/
-inf_speed_tester.py
-test.ipynb
-src/inference/inf_no_onnx.py
-src/inference/inference_autocast.py
+# Specific files
 README_test.md
 test.py
+inf_speed_tester.py
+test.ipynb

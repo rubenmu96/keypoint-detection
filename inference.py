@@ -78,13 +78,13 @@ if __name__ == "__main__":
     How to run:
     python inference.py --media PATH_TO_FOLDER/IMAGE/VIDEO --model_folder PATH_TO_MODEL [--fp32] [--use_onnx]
 
-    python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/resnet18-hm/" --use_onnx
-    python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/resnet18-hm/" --use_onnx --fp32
-    python inference.py --media "dataset/sample_images/clay.jpg" --model_folder "models/resnet18-hm/" --use_onnx
+    python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/resnet18-hm/" --use_onnx
+    python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/resnet18-hm/" --use_onnx --fp32
+    python inference.py --media "examples/test-images/clay.jpg" --model_folder "models/resnet18-hm/" --use_onnx
     python inference.py --media "examples/test-images/" --model_folder "models/resnet18-hm/" --use_onnx
 
-    python inference.py --media "examples/tennis_match_shortened.mp4" --model_folder "models/keypoint-rcnn/" --fp32
-    python inference.py --media "dataset/sample_images" --model_folder "models/keypoint-rcnn" --fp32
+    python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/keypoint-rcnn/" --fp32
+    python inference.py --media "examples/test-images" --model_folder "models/keypoint-rcnn" --fp32
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--media', type=str, help="Path to media (image or video)")

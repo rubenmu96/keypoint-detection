@@ -287,7 +287,7 @@ class KeypointPredictor:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         writer = cv2.VideoWriter(output_path, fourcc, original_fps, (width, height))
 
-        target_frame_time = 1.0 / original_fps
+        target_frame_time = 1.0 / original_fps if original_fps > 0 else 0
         
         if self.device == "cuda":
             self._warmup(height, width)

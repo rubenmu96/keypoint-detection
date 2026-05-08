@@ -9,14 +9,12 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
 matplotlib = "^3.10.3"
-albumentations = ">=2.0.8"
 numpy = "^2.3.0"
 pytubefix = ">=8.13.1"
 validators = ">=0.35.0"
 opencv-python = ">=4.11.0.86"
 imagesize = "^1.4.1"
 
-onnx = ">=1.18.0"
 onnxruntime = ">=1.22"
 torch = [
     { version = ">=2.7.0", markers = "sys_platform == 'win32'",  source = "torch_cuda128" },
@@ -29,6 +27,8 @@ torchvision = [
     { version = ">=0.22.0", markers = "sys_platform == 'darwin'" },
 ]
 pandas = "^3.0.1"
+onnx = "1.21.0"
+albumentations = "^2.0.8"
 
 [[tool.poetry.source]]
 name = "torch_cuda128"
