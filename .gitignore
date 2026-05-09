@@ -2,8 +2,6 @@
 dataset/tennis_court_det_dataset
 predictions/
 models/
-src/inference/inf_no_onnx.py
-src/inference/inference_autocast.py
 
 
 # Specific file types

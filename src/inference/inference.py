@@ -1,4 +1,5 @@
 import time
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,6 +20,8 @@ class KeypointPredictor:
     def __init__(self, cfg, model=None, load_model=None, use_fp16=True, onnx_path=None):
         self.cfg = cfg
         self.use_onnx = onnx_path is not None
+
+        os.makedirs("predictions", exist_ok=True)
         
         if self.use_onnx:
             try:

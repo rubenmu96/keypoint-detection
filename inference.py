@@ -13,9 +13,8 @@ from src.utils import (
 )
 
 def predictor(args, media, folder, use_amp=True):
-    folder = os.path.join(folder, "") # will put "/" at the end if missing
-    # Match only *_config.json to avoid picking up other JSON files (e.g. results).
-    # Model type is determined from cfg.task saved in the config, no --name needed.
+    # Get config file.
+    folder = os.path.join(folder, "")
     cfg_path = glob.glob(f"{folder}*_config.json")[0]
 
     with open(cfg_path, 'r') as f:
