@@ -46,7 +46,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
-pytest = "^8.0"
+pytest = ">=8,<10"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
