@@ -1,8 +1,11 @@
+from dataclasses import dataclass
+
 from config import BaseConfig
 
+@dataclass
 class ResNetConfig(BaseConfig):
     task = "resnet"
-    model = "resnet18"
+    model = "resnet34"
     pretrained = True
     criterion = "smoothl1loss" # loss function
     scale = (0, 1)
@@ -13,9 +16,10 @@ class ResNetConfig(BaseConfig):
     # Saving and converting to onnx
     save_path = f"{model}_{width}x{height}.pth"
     folder = f"models/{model}"
-    onnx = False
+    onnx = True
     onnx_save_path = f"{model}_{width}x{height}"
 
+@dataclass
 class HeatmapConfig(BaseConfig):
     task = "heatmap"
     model = "resnet34"
@@ -33,9 +37,10 @@ class HeatmapConfig(BaseConfig):
     onnx = True # will save onnx
     onnx_save_path = f"heatmap_{model}_{width}x{height}"
 
+@dataclass
 class RCNNConfig(BaseConfig):
     task = "rcnn"
-    base_config = BaseConfig
+    # base_config = BaseConfig
     # Is being skipped for Keypoint R-CNN
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
@@ -47,3 +52,4 @@ class RCNNConfig(BaseConfig):
     folder = f"models/keypoint-rcnn"
     save_path = f"keypoint_rcnn_{width}x{height}.pth"
     onnx = True
+    onnx_save_path = f"rcnn_{width}x{height}"

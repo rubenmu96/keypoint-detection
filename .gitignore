@@ -14,7 +14,4 @@ src/inference/inference_autocast.py
 *.mp4
 
 # Specific files
-README_test.md
-test.py
-inf_speed_tester.py
 test.ipynb

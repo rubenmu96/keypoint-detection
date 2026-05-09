@@ -1,10 +1,15 @@
-import math
+"""
+Testing a subset of the training data to check if code is working.
+"""
 import os
-import torch
-from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader
+import math
 import argparse
 import json
+
+import torch
+from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import DataLoader, Subset
+import numpy as np
 
 from config import (
     config_to_dict,
@@ -18,7 +23,6 @@ from src.trainer import (
     convert_onnx_fp32
 )
 
-# Move to src/utils/utils.py
 def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps):
     def lr_lambda(current_step):
         if current_step < num_warmup_steps:
@@ -27,8 +31,7 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
     return LambdaLR(optimizer, lr_lambda)
 
-
-def main(args, use_amp):
+def main(args, use_amp, test_size=750):
     # Get model and config
     model, cfg = get_model_and_config(args.name)
     cfg = update_cfg_from_args(cfg, args)
@@ -40,6 +43,11 @@ def main(args, use_amp):
 
     # Get keypoint dataset
     train_data, valid_data = KeypointData(cfg, cfg.clean_dataset).get_data()
+
+    indices = np.arange(test_size)
+
+    train_data = Subset(train_data, indices)
+    valid_data = Subset(valid_data, indices)
 
     train_loader = DataLoader(
         dataset=train_data,
@@ -98,20 +106,11 @@ def main(args, use_amp):
 if __name__ == "__main__":
     """
     How to run:
-    python test.py --name MODEL_NAME --num_workers NUMBER_OF_WORKERS [--fp32]
-
-    Example usage:
-    Train using fp16: python main.py --name "heatmap" --num_workers 4
-    Train using fp32: python main.py --name "heatmap" --num_workers 4 --fp32
-
-    RCNN currently requires FP32.
-
-    Other parameters can be changed in the config files (config/config.py and config/model_configs.py).
-
-    Be careful with num_workers on Windows, num_workers > 0 might give unpredictable results or not work.
+    python test.py --name MODEL_NAME --test_size NUMBER_OF_TEST_SAMPLES --num_workers NUMBER_OF_WORKERS [--fp32]
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', type=str, default="rcnn", help="resnet, heatmap, or rcnn")
+    parser.add_argument('--test_size', type=int, default=750, help="How many samples in training set")
     parser.add_argument('--num_workers', type=int, default=0, help="Number of workers")
     parser.add_argument('--fp32', action="store_true", help="Use FP32 instead of FP16")
     args = parser.parse_args()
@@ -121,4 +120,4 @@ if __name__ == "__main__":
     if not torch.cuda.is_available():
         use_amp = False
 
-    main(args, use_amp)
+    main(args, use_amp, test_size=args.test_size)

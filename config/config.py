@@ -1,8 +1,10 @@
 import os
 import glob
+from dataclasses import dataclass
 
 import torch
 
+@dataclass
 class BaseConfig:
     """Dataset and training parameters"""
     # Dataset parameters
@@ -19,8 +21,8 @@ class BaseConfig:
 
     # Training parameters
     epochs = 35
-    batch_size = 4 # 4 for rcnn, 16 for heatmap/resnet
-    learn_rate = 1e-5 # 5e-4 for heatmap/resnet
+    batch_size = 16
+    learn_rate = 5e-4
     weight_decay = 1e-4
     warmup_ratio = 0.15
 

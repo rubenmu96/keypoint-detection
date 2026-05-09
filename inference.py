@@ -78,18 +78,13 @@ if __name__ == "__main__":
     How to run:
     python inference.py --media PATH_TO_FOLDER/IMAGE/VIDEO --model_folder PATH_TO_MODEL [--fp32] [--use_onnx]
 
+    Example usage:
     python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/resnet18-hm/" --use_onnx
-    python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/resnet18-hm/" --use_onnx --fp32
-    python inference.py --media "examples/test-images/clay.jpg" --model_folder "models/resnet18-hm/" --use_onnx
-    python inference.py --media "examples/test-images/" --model_folder "models/resnet18-hm/" --use_onnx
-
-    python inference.py --media "examples/tennis_match1.mp4" --model_folder "models/keypoint-rcnn/" --fp32
-    python inference.py --media "examples/test-images" --model_folder "models/keypoint-rcnn" --fp32
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--media', type=str, help="Path to media (image or video)")
     parser.add_argument('--model_folder', type=str, help="Path to model folder")
-    parser.add_argument('--use_onnx', action='store_true', help="Use onnx") # maybe just --onnx?
+    parser.add_argument('--use_onnx', action='store_true', help="Use onnx")
     parser.add_argument('--fp32', action='store_true', help="Use FP32 instead of FP16")
     parser.add_argument('--output_dir', type=str, default='predictions/', help="Output direction of image, video, folder")
     parser.add_argument('--batch_size', type=int, default=4, help="Batch size for folder prediction")
