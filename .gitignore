@@ -1,7 +1,7 @@
 # Folders
-dataset/tennis_court_det_dataset
+dataset/
 predictions/
-models/
+/models/
 
 
 # Specific file types

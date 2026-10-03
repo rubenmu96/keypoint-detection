@@ -1,3 +1,4 @@
+"""Utils"""
 import os
 import glob
 from pathlib import Path
@@ -21,13 +22,15 @@ model_dictionary = {
     "resnet50": {"model": models.resnet50, "input_size": 2048, "weights": "IMAGENET1K_V2"}
 }
 
-def get_model_and_config(name="resnet", classes=None):
+def get_model_and_config(name="resnet"):
+    """Load model and config for training."""
     name = name.lower()
+    model = None
 
     valid_models = ["resnet", "heatmap", "rcnn"]
     if name not in valid_models:
         raise ValueError(f"name should be one of: {valid_models}, got '{name}'")
-    
+
     if name == "resnet":
         cfg = ResNetConfig
         model = ResNetKeypoint(
@@ -48,16 +51,22 @@ def get_model_and_config(name="resnet", classes=None):
         )
     elif name == "rcnn":
         cfg = RCNNConfig
-        model = KeypointRCNN(cfg.num_kps)
-    cfg.model_name = model.__class__.__name__
-    return model, cfg
+        model = KeypointRCNN(cfg.num_kps, pretrained=cfg.pretrained)
+
+    if model is not None:
+        cfg.model_name = model.__class__.__name__
+        return model, cfg
+
+    return print("Could not find model.")
 
 
 def load_model_inference(name, config):
+    """Load model and config for inference."""
+    model = None
     valid_models = ["resnet", "heatmap", "rcnn"]
     if name not in valid_models:
         raise ValueError(f"name should be one of: {valid_models}, got '{name}'")
-    
+
     if name == "heatmap":
         model = ResNetHeatmap(
             model=model_dictionary[config.model]["model"],
@@ -74,29 +83,38 @@ def load_model_inference(name, config):
             pretrained=config.pretrained
         )
     elif name=="rcnn":
-        model = KeypointRCNN(config.num_kps)
+        # Must match the setting used in training: pretrained changes the backbone's
+        # norm layers, so the checkpoint only loads into the same variant. Configs
+        # saved before the option existed have no key, and those models were
+        # always trained from the pretrained weights.
+        model = KeypointRCNN(config.num_kps, pretrained=getattr(config, "pretrained", True))
 
-    return model
+    if model is not None:
+        return model
 
-def get_file_type(filename):
+    return print("Could not load model.")
+
+def get_file_type(filename) -> str:
     """Determine file type based on extension"""
     filename = filename.lower()
-    
+
     image_extensions = {
         '.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp'
     }
     video_extensions = {
         '.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm'
     }
-    
+
     ext = os.path.splitext(filename)[1]
-    
+
     if ext in image_extensions:
         return 'image'
-    elif ext in video_extensions:
+
+    if ext in video_extensions:
         return 'video'
-    else:
-        return 'unknown'
+
+    return 'unknown'
+
 
 def get_images_from_folder(folder_path):
     """Get all image files from a folder."""
@@ -107,27 +125,30 @@ def get_images_from_folder(folder_path):
     for ext in image_extensions:
         images.extend(glob.glob(os.path.join(folder_path, f"*{ext}")))
         images.extend(glob.glob(os.path.join(folder_path, f"*{ext.upper()}")))
+
     return sorted(images)
+
 
 def predict_folder(predictor, folder_path, batch_size=4, output_dir="predictions/"):
     """Process all images in a folder with batch inference."""
-    images = list(set(
-        get_images_from_folder(folder_path)))
-    
+    images = list(set(get_images_from_folder(folder_path)))
+
     if not images:
         print(f"No images found in {folder_path}")
-        return
-    
+        return None
+
     print(f"Found {len(images)} images in {folder_path}")
     os.makedirs(output_dir, exist_ok=True)
-    
+
     all_results = {}
     for i in range(0, len(images), batch_size):
         batch_paths = images[i:i + batch_size]
-        print(f"Processing batch {i // batch_size + 1}/{(len(images) + batch_size - 1) // batch_size}")
-        
+        print(
+            f"Processing batch {i // batch_size + 1}/{(len(images) + batch_size - 1) // batch_size}"
+        )
+
         batch_keypoints = predictor.predict_batch(batch_paths)
-        
+
         for img_path, keypoints in zip(batch_paths, batch_keypoints):
             filename = Path(img_path).stem
             output_path = os.path.join(output_dir, f"{filename}.png")

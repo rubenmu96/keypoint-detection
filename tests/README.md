@@ -4,7 +4,7 @@
 
 Run all tests with: ```poetry run pytest```
 
-There are 84 tests across 4 files. All tests run on CPU with no dataset or pretrained weights required.
+There are 95 tests across 4 files. All tests run on CPU with no dataset or pretrained weights required.
 
 ---
 
@@ -138,9 +138,8 @@ Tests `compute_pck`, `compute_mpjpe`, `compute_loss`, and the RCNN keypoint loss
 
 ---
 
-## Testing of models (15 tests)
+## Testing of models (26 tests)
 All model tests run on CPU with `pretrained=False` — no network downloads required.
-KeypointRCNN is excluded because it hardcodes `weights='DEFAULT'`.
 
 ### TestResNetKeypoint
 | Test | Description |
@@ -164,3 +163,22 @@ KeypointRCNN is excluded because it hardcodes `weights='DEFAULT'`.
 | `test_eval_mode_consistent_across_batch_sizes` | The same image repeated in a batch produces identical per-image outputs in eval mode |
 | `test_gradient_flows` | A gradient flows back through the entire model |
 | `test_num_kps_respected` | Instantiating with `num_kps ∈ {4, 7, 14}` produces the correct number of output channels |
+
+### TestKeypointRCNN
+`pretrained=False` sets both `weights` and `weights_backbone` to `None`. Setting only `weights=None` would still make torchvision download the ImageNet ResNet-50 backbone.
+The tests pin the model's internal resize (`min_size`/`max_size`) to the 224×336 test image size. The default resizes everything to 800 px, which makes each CPU forward pass about 6× slower.
+Training targets are built with the same `keypoints_region` and `keypoints_with_visibility` helpers that `KeypointPyTorch` uses, so the tests also check that the dataset's target format is what the model expects.
+
+| Test | Description |
+|---|---|
+| `test_pretrained_false_downloads_nothing` | With weight downloads intercepted, `pretrained=False` builds without requesting any URL, backbone included |
+| `test_pretrained_true_requests_coco_keypoint_weights` | `pretrained=True` requests the full COCO Keypoint R-CNN checkpoint (intercepted, nothing is downloaded) |
+| `test_keypoint_head_resized_to_num_kps` | The COCO 17-keypoint predictor is replaced by one with `num_kps` output channels |
+| `test_constructor_options_applied` | `num_classes`, `score_thresh` and pass-through kwargs (`min_size`, `max_size`) reach the torchvision model |
+| `test_eval_returns_one_prediction_per_image` | Eval mode returns a list with one prediction dict per image, with the expected keys |
+| `test_eval_output_shapes_consistent` | All per-detection tensors share the same `N`; keypoints are `[N, num_kps, 3]` and keypoint scores `[N, num_kps]` |
+| `test_eval_outputs_finite` | Boxes, scores, keypoints and keypoint scores contain no NaN or Inf values |
+| `test_train_returns_all_losses` | Train mode returns all five losses (classifier, box, objectness, RPN box, keypoint) as finite scalars |
+| `test_gradient_reaches_keypoint_head` | `loss_keypoint` backpropagates into the replaced keypoint predictor with a non-zero gradient |
+| `test_get_loss_switches_to_train_mode` | `get_loss()` puts the model in train mode and returns the loss dict |
+| `test_predict_switches_to_eval_mode_without_grad` | `predict()` puts the model in eval mode and returns predictions that do not require grad |

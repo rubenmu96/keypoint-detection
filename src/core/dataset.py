@@ -1,20 +1,30 @@
+"""Keypoint datasets: loading, cleaning and augmenting the train/valid splits,
+plus batch collation for each model type."""
 import cv2
 import numpy as np
 import pandas as pd
-
 import imagesize
 import torch
 from torch.utils.data import Dataset
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
+
 from src.utils import (
     keypoints_with_visibility,
     keypoints_region,
     keypoint_scaler
 )
 
+
 class KeypointPyTorch(Dataset):
-    """Maybe make a Dataset class for each model, rather than one global?"""
+    """Images and keypoints for one data split, read from cfg.img_dir/<id>.png.
+
+    Each item is (image, target). For KeypointRCNN the target is a dict with
+    'boxes', 'labels' and 'keypoints' ([1, K, 3]) in pixel coordinates; for the
+    other models it is a flat [K * 2] tensor scaled according to cfg.scale.
+    A truthy transform selects the training augmentations; otherwise the
+    deterministic validation transform is used.
+    """
     def __init__(self, data, cfg, transform=None):
         self.img_dir = cfg.img_dir
         self.data = data.copy()
@@ -39,8 +49,9 @@ class KeypointPyTorch(Dataset):
             else:
                 self.transform = self._val_transform(cfg)
 
+
     @staticmethod
-    def _train_transform(cfg, p=0.4):
+    def _train_transform(cfg, p=0.4) -> A.Compose:
         return A.Compose([
             A.Resize(width=cfg.width, height=cfg.height),
             A.MotionBlur(blur_limit=3, p=0.2),
@@ -51,16 +62,18 @@ class KeypointPyTorch(Dataset):
             ToTensorV2(p=1.0),
         ], keypoint_params=A.KeypointParams(format="xy"))
 
+
     @staticmethod
-    def _val_transform(cfg):
+    def _val_transform(cfg) -> A.Compose:
         return A.Compose([
             A.Resize(width=cfg.width, height=cfg.height),
             A.Normalize(mean=cfg.mean, std=cfg.std),
             ToTensorV2(p=1.0),
         ], keypoint_params=A.KeypointParams(format="xy"))
 
+
     @staticmethod
-    def _train_transform_rcnn(cfg, p=0.4):
+    def _train_transform_rcnn(cfg, p=0.4) -> A.Compose:
         """
         No A.Normalize — model expects [0, 1] float tensors.
         A.ToFloat(max_value=255) divides by 255 to get [0, 1] float32.
@@ -76,23 +89,28 @@ class KeypointPyTorch(Dataset):
             ToTensorV2(p=1.0),
             ], keypoint_params=A.KeypointParams(format="xy"))
 
+
     @staticmethod
-    def _val_transform_rcnn(cfg):
+    def _val_transform_rcnn(cfg) -> A.Compose:
         return A.Compose([
             A.Resize(width=cfg.width, height=cfg.height),
             A.ToFloat(max_value=255),
             ToTensorV2(p=1.0),
         ], keypoint_params=A.KeypointParams(format="xy"))
-    
+
+
     @staticmethod
     def clip_kps(kps, width, height):
+        """Return a copy of kps ([N, 2]) clamped to lie inside a width x height image."""
         kps = kps.copy()
         kps[:, 0] = np.clip(kps[:, 0], 0, width - 1)
         kps[:, 1] = np.clip(kps[:, 1], 0, height - 1)
         return kps
 
-    def __len__(self):
+
+    def __len__(self) -> int:
         return len(self.data)
+
 
     def __getitem__(self, idx):
         item = self.data.iloc[idx]
@@ -101,13 +119,13 @@ class KeypointPyTorch(Dataset):
         if image is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
+
         h, w, _ = image.shape
 
         keypoints = item["kps"]
 
         keypoints = self.clip_kps(keypoints, width=w, height=h)
-        
+
         # Apply albumentations transformation
         transformed = self.transform(image=image, keypoints=keypoints)
         image = transformed["image"]
@@ -123,7 +141,7 @@ class KeypointPyTorch(Dataset):
                 width=self.width, 
                 height=self.height
             )
-    
+
             target = {
                 'boxes': bbox,
                 'labels': torch.ones((1,), dtype=torch.int64), 
@@ -141,7 +159,7 @@ class KeypointData:
         self.valid_data = pd.read_json(cfg.valid_json)
         self.cfg = cfg
         self.clean = clean
-    
+
     def clean_keypoints(self, df, img_path):
         """Remove keypoints that are outside image boundary."""
         def get_shape(path):
@@ -150,24 +168,30 @@ class KeypointData:
                 return height, width
             except Exception:
                 return None, None
-        
+
         def kps_outside(coords, height, width):
             if height is None:
                 return True
             coords = np.asarray(coords)
             x, y = coords[:, 0], coords[:, 1]
             return x.max() > width or x.min() < 0 or y.max() > height or y.min() < 0
-        
+
         df = df.copy()
         df["img_path"] = f"{img_path}/" + df["id"]
-        
+
         df["height"], df["width"] = zip(*df["img_path"].map(get_shape))
-        
+
         mask = ~df.apply(lambda r: kps_outside(r["kps"], r["height"], r["width"]), axis=1)
-        
+
         return df.loc[mask]
-    
-    def get_data(self):
+
+    def get_data(self) -> tuple[KeypointPyTorch, KeypointPyTorch]:
+        """Build the train and valid datasets.
+
+        With clean set, samples with any keypoint outside their image are dropped
+        from both splits first. Training augmentation follows cfg.train_aug; the
+        validation set is never augmented.
+        """
         train, valid = self.train_data, self.valid_data
 
         # clean_keypoints filters rows whose keypoints fall outside the actual
@@ -178,13 +202,13 @@ class KeypointData:
 
         train_dataset = KeypointPyTorch(train, self.cfg, transform=self.cfg.train_aug)
         valid_dataset = KeypointPyTorch(valid, self.cfg, transform=False)
-        
+
         return train_dataset, valid_dataset
-    
+
 
 class CollateFunction:
     """Collate function for stacking samples into batch"""
-    def __init__(self, model_name):
+    def __init__(self, model_name) -> None:
         self.model_name = model_name
 
     @staticmethod
@@ -192,21 +216,21 @@ class CollateFunction:
         """Collate function for Keypoint R-CNN"""
         images = [item[0] for item in batch]
         targets = [item[1] for item in batch]
-        
+
         images = torch.stack(images, dim=0)
         return images, targets
-        
+
+
     @staticmethod
-    def collate_fn(batch):
+    def collate_fn(batch) -> tuple[torch.Tensor, torch.Tensor]:
         """Collate function for Resnet/Heatmap"""
-        images = [item[0] for item in batch]
-        keypoints = [item[1] for item in batch]
-        images = torch.stack(images)
-        keypoints = torch.stack(keypoints)
-        return images, keypoints
+        images: list[torch.Tensor] = [item[0] for item in batch]
+        keypoints: list[torch.Tensor] = [item[1] for item in batch]
+
+        return torch.stack(images), torch.stack(keypoints)
 
     def __call__(self, batch):
         if self.model_name == "KeypointRCNN":
             return self.collate_rcnn(batch)
-        else:
-            return self.collate_fn(batch)
+
+        return self.collate_fn(batch)

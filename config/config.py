@@ -40,9 +40,9 @@ class BaseConfig:
     - see how the model improves or worsen for each epoch
     """
     display_examples = True
-    
+
     # if not same length as sample_images_path, will use img_i instead as image name
-    display_names = ["clay", "fed", "synframe", "synthetic"] # optional 
+    display_names = ["clay", "fed", "synframe", "synthetic"] # optional
     images = (
         glob.glob(os.path.join("examples/test-images/", '*.jpg')) + 
         glob.glob(os.path.join("examples/test-images/", '*.png'))

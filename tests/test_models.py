@@ -5,15 +5,17 @@ All tests run on CPU with pretrained=False to avoid network downloads in CI.
 Tests cover:
   - ResNetKeypoint  – regression head model
   - ResNetHeatmap   – heatmap head model
-
-KeypointRCNN is excluded: it hardcodes weights='DEFAULT', requiring a
-network download that is unsuitable for lightweight CI.
+  - KeypointRCNN    – detection model with a resized keypoint head
 """
 import pytest
 import torch
+import torch.hub
+import torchvision.models._api
 
 from src.models.heatmap import ResNetHeatmap
+from src.models.keypoint_rcnn import KeypointRCNN
 from src.models.resnet import ResNetKeypoint
+from src.utils.processing import keypoints_region, keypoints_with_visibility
 
 # ---------------------------------------------------------------------------
 # Shared model fixtures (module-scoped: built once per test session)
@@ -33,6 +35,20 @@ def resnet_kp():
 def resnet_hm():
     """ResNetHeatmap (resnet34 backbone) – CPU, random weights, 224-px calibration."""
     model = ResNetHeatmap(pretrained=False, num_kps=NUM_KPS, input_size=224)
+    return model.eval()
+
+
+# KeypointRCNN resizes every image so its shorter side is min_size (default 800).
+# Pinning the resize to the test image size makes CPU forward passes ~6x faster.
+RCNN_IMG_H, RCNN_IMG_W = 224, 336
+
+
+@pytest.fixture(scope="module")
+def keypoint_rcnn():
+    """KeypointRCNN – CPU, random weights, resize pinned to the test image size."""
+    model = KeypointRCNN(
+        num_kps=NUM_KPS, pretrained=False, min_size=RCNN_IMG_H, max_size=RCNN_IMG_W
+    )
     return model.eval()
 
 
@@ -181,3 +197,149 @@ class TestResNetHeatmap:
             with torch.no_grad():
                 out = model(self._img())
             assert out.shape[1] == k, f"Expected {k} channels, got {out.shape[1]}"
+
+
+# ---------------------------------------------------------------------------
+# KeypointRCNN
+# ---------------------------------------------------------------------------
+
+LOSS_KEYS = {
+    "loss_classifier", "loss_box_reg", "loss_objectness", "loss_rpn_box_reg", "loss_keypoint"
+}
+PREDICTION_KEYS = {"boxes", "labels", "scores", "keypoints", "keypoints_scores"}
+
+
+class _DownloadBlocked(Exception):
+    """Raised in place of a weight download, so no test can reach the network."""
+
+
+@pytest.fixture
+def blocked_downloads(monkeypatch):
+    """Intercept torchvision weight downloads and record the URLs requested."""
+    requested = []
+
+    def fake_download(url, *args, **kwargs):
+        requested.append(url)
+        raise _DownloadBlocked(url)
+
+    # torchvision imports the function into its own namespace, so patch both names.
+    monkeypatch.setattr(torchvision.models._api, "load_state_dict_from_url", fake_download)
+    monkeypatch.setattr(torch.hub, "load_state_dict_from_url", fake_download)
+    return requested
+
+
+class TestKeypointRCNN:
+    IMG_H, IMG_W = RCNN_IMG_H, RCNN_IMG_W
+
+    def _images(self, B=1):
+        return [torch.rand(3, self.IMG_H, self.IMG_W) for _ in range(B)]
+
+    def _fresh_model(self, **kwargs):
+        """Separate model for train-mode tests: training updates BatchNorm running stats."""
+        return KeypointRCNN(
+            num_kps=NUM_KPS, pretrained=False,
+            min_size=self.IMG_H, max_size=self.IMG_W, **kwargs
+        )
+
+    def _target(self, seed=0):
+        """One training target, built with the same helpers as KeypointPyTorch."""
+        gen = torch.Generator().manual_seed(seed)
+        xs = torch.randint(20, self.IMG_W - 20, (NUM_KPS,), generator=gen)
+        ys = torch.randint(20, self.IMG_H - 20, (NUM_KPS,), generator=gen)
+        kps = torch.stack([xs, ys], dim=1).float().numpy()
+        return {
+            "boxes": keypoints_region(kps, offset=10, width=self.IMG_W, height=self.IMG_H),
+            "labels": torch.ones((1,), dtype=torch.int64),
+            "keypoints": keypoints_with_visibility(kps).unsqueeze(0),
+        }
+
+    # Construction
+
+    def test_pretrained_false_downloads_nothing(self, blocked_downloads):
+        """pretrained=False builds without fetching any weights, backbone included."""
+        KeypointRCNN(num_kps=NUM_KPS, pretrained=False)
+        assert not blocked_downloads
+
+    def test_pretrained_true_requests_coco_keypoint_weights(self, blocked_downloads):
+        """pretrained=True asks for the full COCO Keypoint R-CNN checkpoint."""
+        with pytest.raises(_DownloadBlocked):
+            KeypointRCNN(num_kps=NUM_KPS, pretrained=True)
+        assert len(blocked_downloads) == 1
+        assert "keypointrcnn_resnet50_fpn_coco" in blocked_downloads[0]
+
+    def test_keypoint_head_resized_to_num_kps(self, keypoint_rcnn):
+        """The COCO 17-keypoint predictor is replaced by one with num_kps outputs."""
+        predictor = keypoint_rcnn.model.roi_heads.keypoint_predictor
+        assert predictor.kps_score_lowres.out_channels == NUM_KPS
+
+    def test_constructor_options_applied(self):
+        """num_classes, score_thresh and pass-through kwargs reach the torchvision model."""
+        model = self._fresh_model(num_classes=3, score_thresh=0.3)
+        assert model.model.roi_heads.box_predictor.cls_score.out_features == 3
+        assert model.model.roi_heads.score_thresh == 0.3
+        assert model.model.transform.min_size == (self.IMG_H,)
+        assert model.model.transform.max_size == self.IMG_W
+
+    # Inference
+
+    def test_eval_returns_one_prediction_per_image(self, keypoint_rcnn):
+        """Eval mode returns a list with one prediction dict per input image."""
+        with torch.no_grad():
+            out = keypoint_rcnn.eval()(self._images(B=2))
+        assert isinstance(out, list)
+        assert len(out) == 2
+        for pred in out:
+            assert set(pred) == PREDICTION_KEYS
+
+    def test_eval_output_shapes_consistent(self, keypoint_rcnn):
+        """All per-detection tensors share the same N; keypoints are [N, num_kps, 3]."""
+        with torch.no_grad():
+            pred = keypoint_rcnn.eval()(self._images())[0]
+        n = pred["boxes"].shape[0]
+        assert pred["boxes"].shape == (n, 4)
+        assert pred["labels"].shape == (n,)
+        assert pred["scores"].shape == (n,)
+        assert pred["keypoints"].shape == (n, NUM_KPS, 3)
+        assert pred["keypoints_scores"].shape == (n, NUM_KPS)
+
+    def test_eval_outputs_finite(self, keypoint_rcnn):
+        """No NaN or Inf in any floating-point prediction."""
+        with torch.no_grad():
+            pred = keypoint_rcnn.eval()(self._images())[0]
+        for key in ("boxes", "scores", "keypoints", "keypoints_scores"):
+            assert torch.isfinite(pred[key]).all(), key
+
+    # Training
+
+    def test_train_returns_all_losses(self):
+        """Train mode with dataset-format targets returns every loss as a finite scalar."""
+        model = self._fresh_model().train()
+        losses = model(self._images(B=2), [self._target(seed=0), self._target(seed=1)])
+        assert set(losses) == LOSS_KEYS
+        for name, value in losses.items():
+            assert value.ndim == 0, name
+            assert torch.isfinite(value), name
+
+    def test_gradient_reaches_keypoint_head(self):
+        """loss_keypoint backpropagates into the replaced keypoint predictor."""
+        model = self._fresh_model().train()
+        losses = model(self._images(), [self._target()])
+        losses["loss_keypoint"].backward()
+        grad = model.model.roi_heads.keypoint_predictor.kps_score_lowres.weight.grad
+        assert grad is not None
+        assert grad.abs().sum() > 0
+
+    def test_get_loss_switches_to_train_mode(self):
+        """get_loss puts the model in train mode and returns the loss dict."""
+        model = self._fresh_model().eval()
+        losses = model.get_loss(self._images(), [self._target()])
+        assert model.training
+        assert set(losses) == LOSS_KEYS
+
+    def test_predict_switches_to_eval_mode_without_grad(self):
+        """predict puts the model in eval mode and returns detached predictions."""
+        model = self._fresh_model().train()
+        preds = model.predict(self._images())
+        assert not model.training
+        assert isinstance(preds, list)
+        assert not preds[0]["keypoints"].requires_grad

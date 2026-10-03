@@ -1,3 +1,4 @@
+"""Config for model classes"""
 from dataclasses import dataclass
 
 from config import BaseConfig
@@ -11,8 +12,7 @@ class ResNetConfig(BaseConfig):
     scale = (0, 1)
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
-    width = 672
-    height = 448
+    width, height = 672, 448
     # Saving and converting to onnx
     save_path = f"{model}_{width}x{height}.pth"
     folder = f"models/{model}"
@@ -29,8 +29,7 @@ class HeatmapConfig(BaseConfig):
     scale = (0, 1)
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
-    width = 672
-    height = 448
+    width, height = 672, 448
     # Saving and converting to onnx
     save_path = f"heatmap_{model}_{width}x{height}.pth"
     folder = f"models/{model}-hm"
@@ -40,16 +39,16 @@ class HeatmapConfig(BaseConfig):
 @dataclass
 class RCNNConfig(BaseConfig):
     task = "rcnn"
+    pretrained = True
     # base_config = BaseConfig
     # Is being skipped for Keypoint R-CNN
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
     scale = None
     criterion = "mseloss" # loss function
-    width = 672
-    height = 448
+    width, height = 672, 448
     # Saving and converting to onnx
-    folder = f"models/keypoint-rcnn"
+    folder = "models/keypoint-rcnn"
     save_path = f"keypoint_rcnn_{width}x{height}.pth"
     onnx = True
     onnx_save_path = f"rcnn_{width}x{height}"

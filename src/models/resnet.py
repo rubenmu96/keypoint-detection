@@ -1,6 +1,5 @@
-import torch
 from torchvision import models
-import torch.nn as nn
+from torch import nn
 
 class ResNetKeypoint(nn.Module):
     def __init__(self, model=models.resnet34, weights="IMAGENET1K_V1", input_size=512, num_kps=14, pretrained=True):
@@ -9,9 +8,7 @@ class ResNetKeypoint(nn.Module):
             self.model = model(weights=weights)
         else:
             self.model = model(weights=None)
-        # self.model.fc = torch.nn.Linear(input_size, num_kps*2) # 14 keypoints with (x, y)
 
-        # self.model.fc = nn.Identity()
         self.backbone = nn.Sequential(*list(self.model.children())[:-2])
 
         self.regression_head = nn.Sequential(

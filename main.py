@@ -1,10 +1,12 @@
-import math
+"""Train a keypoint model (resnet, heatmap or Keypoint R-CNN) and export it to ONNX."""
 import os
+import argparse
+import json
+import math
+
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
-import argparse
-import json
 
 from config import (
     config_to_dict,
@@ -19,16 +21,25 @@ from src.trainer import (
 )
 
 # Move to src/utils/utils.py
-def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps):
-    def lr_lambda(current_step):
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps) -> LambdaLR:
+    """Cosine scheduler with warmup."""
+    def lr_lambda(current_step) -> float:
         if current_step < num_warmup_steps:
             return float(current_step) / float(max(1, num_warmup_steps))
-        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        progress = float(
+            current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps)
+        )
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
     return LambdaLR(optimizer, lr_lambda)
 
 
-def main(args, use_amp):
+def main(args, use_amp) -> None:
+    """Train the model selected by args.name and export it.
+
+    Writes the run's config to cfg.folder/<name>_config.json, which inference.py
+    reads back, then trains with early stopping. When cfg.onnx is set, the best
+    checkpoint is converted to ONNX: FP32 always, and FP16 as well when use_amp.
+    """
     # Get model and config
     model, cfg = get_model_and_config(args.name)
     cfg = update_cfg_from_args(cfg, args)
@@ -73,9 +84,9 @@ def main(args, use_amp):
     )
 
     config_dict = config_to_dict(cfg)
-    
+
     os.makedirs(cfg.folder, exist_ok=True)
-    with open(f'{cfg.folder}/{args.name}_config.json', 'w') as f:
+    with open(f'{cfg.folder}/{args.name}_config.json', 'w', encoding="utf-8") as f:
         json.dump(config_dict, f, indent=4)
 
     train = Trainer(
@@ -114,11 +125,11 @@ if __name__ == "__main__":
     parser.add_argument('--name', type=str, default="rcnn", help="resnet, heatmap, or rcnn")
     parser.add_argument('--num_workers', type=int, default=0, help="Number of workers")
     parser.add_argument('--fp32', action="store_true", help="Use FP32 instead of FP16")
-    args = parser.parse_args()
+    arguments = parser.parse_args()
 
-    use_amp = not args.fp32
+    amp = not arguments.fp32
 
     if not torch.cuda.is_available():
-        use_amp = False
+        amp = False
 
-    main(args, use_amp)
+    main(args=arguments, use_amp=amp)

@@ -1,11 +1,13 @@
+"""Training loop with early stopping, FP32/FP16 checkpointing and per-epoch
+sample visualizations."""
 import os
 import time
 
+import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import torch
-import cv2
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 import matplotlib.pyplot as plt
@@ -19,9 +21,16 @@ from src.utils import (
 )
 
 class Trainer:
+    """Train and validate a keypoint model, tracking metrics per epoch.
+
+    The best checkpoint (by cfg.metric_tracker) is saved to cfg.folder, and the
+    per-epoch metrics are written to tracking.csv in the same folder. Mixed
+    precision is used when use_amp is set, except for KeypointRCNN, which always
+    trains in FP32.
+    """
     def __init__(
-            self, cfg, model, optimizer, scheduler=None, scaler=None, use_amp=False
-        ):
+            self, cfg, model, optimizer, scheduler=None, use_amp=False
+        ) -> None:
         self.cfg = cfg
         self.model = model
         self.optimizer = optimizer
@@ -35,7 +44,7 @@ class Trainer:
         self.scaler = torch.amp.GradScaler('cuda', enabled=amp_active)
         self.use_amp = amp_active
 
-    def save_model_fp32(self, model, path):
+    def save_model_fp32(self, model, path) -> None:
         """Save model in FP32 format"""
         torch.save({
             'model_state_dict': model.state_dict(),
@@ -43,11 +52,11 @@ class Trainer:
             'model_name': self.model_name
         }, path)
 
-    def save_model_fp16(self, model, path):
+    def save_model_fp16(self, model, path) -> None:
         """Save model in FP16 format to reduce file size"""
         try:
             model_fp16 = model.half() if self.device != 'cpu' else model
-            
+
             torch.save({
                 'model_state_dict': model_fp16.state_dict(),
                 'dtype': 'fp16' if self.device != 'cpu' else 'fp32',
@@ -65,15 +74,15 @@ class Trainer:
 
         fp32_path = f"{base}_fp32{ext}"
         fp16_path = f"{base}_fp16{ext}"
-        
+
         self.save_model_fp32(model, fp32_path)
         if self.use_amp:
             self.save_model_fp16(model, fp16_path)
-    
+
     def _train(self, train_data):
         total_loss = 0
         num_batches = 0
-        
+
         times = {
             'total_time': 0,
             'data': 0,
@@ -81,14 +90,14 @@ class Trainer:
             'backward': 0,
             'optimizer': 0,
         }
-        
+
         self.model.train()
         pbar = tqdm(train_data, desc="Training", leave=False)
-        
+
         start = time.time()
         for img, kps in pbar:
             times["data"] += time.time() - start
-            
+
             img = img.to(self.device, non_blocking=True)
             if self.model_name == "KeypointRCNN":
                 kps = [{k: v.to(self.cfg.device) for k, v in t.items()} for t in kps]
@@ -96,7 +105,7 @@ class Trainer:
                 kps = kps.to(self.device, non_blocking=True)
 
             self.optimizer.zero_grad()
-            
+
             start = time.time()
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
                 if self.model_name == "KeypointRCNN":
@@ -106,11 +115,12 @@ class Trainer:
                     outputs = self.model(img)
                     loss = compute_loss(self.cfg, outputs, kps)
             times["forward"] += time.time() - start
-            
+
             start = time.time()
             self.scaler.scale(loss).backward()
             self.scaler.unscale_(self.optimizer)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0) # add max_norm to config?
+            # add max_norm to config?
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             times["backward"] += time.time() - start
 
             start = time.time()
@@ -126,22 +136,23 @@ class Trainer:
 
             pbar.set_postfix({'loss': f'{loss.item():.4f}'})
             start = time.time()
-        
+
         times["total_time"] = sum(times.values())
 
         tracking = {
             "loss": total_loss / num_batches if num_batches > 0 else 0.0,
         }
         tracking.update(times)
-        
+
         return tracking
 
+
     @torch.no_grad()
-    def _evaluate(self, valid_data):        
+    def _evaluate(self, valid_data):
         losses = []
         all_pck = []
         all_mpjpe = []
-        
+
         times = {
             "total_time": 0,
             "data": 0,
@@ -149,30 +160,30 @@ class Trainer:
             "loss_compute": 0,
             "accuracy_calcs": 0
         }
-        
+
         self.model.eval()
         pbar = tqdm(valid_data, desc="Validation", leave=False)
-        
+
         start = time.time()
         for img, kps in pbar:
             times['data'] += time.time() - start
-            
+
             img = img.to(self.device, non_blocking=True)
             if self.model_name == "KeypointRCNN":
                 kps = [{k: v.to(self.cfg.device) for k, v in t.items()} for t in kps]
             else:
                 kps = kps.to(self.device, non_blocking=True)
-            
+
             start = time.time()
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16, enabled=self.use_amp):
                 assert not self.model.training, "_evaluate called with model in train mode"
                 outputs = self.model(img)
             times['forward'] += time.time() - start
-            
+
             start = time.time()
             loss = compute_loss(self.cfg, outputs, kps)
             times['loss_compute'] += time.time() - start
-            
+
             losses.append(loss)
 
             start = time.time()
@@ -187,7 +198,7 @@ class Trainer:
                 'MPJPE': f'{scores["mpjpe"]:.3f}'
             })
             start = time.time()
-        
+
         avg_loss = torch.stack(losses).mean().item()
         avg_pck = np.mean(all_pck)
         avg_mpjpe = np.mean(all_mpjpe)
@@ -200,13 +211,23 @@ class Trainer:
             "mpjpe": avg_mpjpe
         }
         tracking.update(times)
-        
+
         return tracking
-    
+
     def _early_stopping(self, es, current_loss, best_loss, patience, greater_is_better=False):
+        """Update the early-stopping state after an epoch.
+
+        current_loss is the tracked metric, which is not necessarily a loss: with
+        greater_is_better, a higher value counts as an improvement. On improvement
+        the model is saved and best_loss updated; otherwise the counter es goes up.
+        es is only reset on improvement when cfg.reset is set, so patience counts
+        consecutive epochs without improvement with reset, and the total without.
+
+        Returns (es, best_loss, stop), where stop is True once es reaches patience.
+        """
         if patience <= 0:
             raise ValueError("Patience must be a positive integer.")
-        
+
         if greater_is_better:
             is_better = current_loss > best_loss
         else:
@@ -220,11 +241,13 @@ class Trainer:
             best_loss = current_loss
         else:
             es += 1
-        
+
         stop = es >= patience
+
         return es, best_loss, stop
-    
+
     def train(self, train_data, valid_data):
+        """Train model and evalulate on validation set."""
         epoch_metrics = []
         es = 0
         greater_is_better = self.cfg.greater_is_better
@@ -234,7 +257,7 @@ class Trainer:
             self.cfg.patience = self.cfg.epochs
 
         pbar = tqdm(range(self.cfg.epochs), desc="Epochs")
-        
+
         for epoch in pbar:
             train_metrics = self._train(train_data=train_data)
             valid_metrics = self._evaluate(valid_data=valid_data)
@@ -245,7 +268,7 @@ class Trainer:
                 "valid_pck@0.05": f'{valid_metrics["pck@0.05"]:.4f}',
                 "valid_mpjpe": f'{valid_metrics["mpjpe"]:.4f}',
             })
-            
+
             metric_key = self.cfg.metric_tracker.replace("valid_", "")
             es, best_loss, stop = self._early_stopping(
                 es, valid_metrics[metric_key], best_loss,
@@ -258,7 +281,7 @@ class Trainer:
             if stop:
                 print("Early stopping triggered.")
                 break
-            
+
             output_path = os.path.join(self.folder, "tracking.csv")
             metrics = {
                 "training": train_metrics,
@@ -269,9 +292,9 @@ class Trainer:
             epoch_metrics.append(metrics)
             df = pd.DataFrame(epoch_metrics)
             df.to_csv(output_path, index=False)
-    
+
 @torch.no_grad()
-def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-images/"):
+def vis_testing(cfg, model, image_path, *, epoch, name, use_amp, folder_path="test-images/"):
     """Visualize sample images during training."""
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
@@ -302,7 +325,7 @@ def vis_testing(cfg, model, image_path, epoch, name, use_amp, folder_path="test-
             A.Normalize(mean=cfg.mean, std=cfg.std),
             ToTensorV2(p=1.0),
         ])
-    
+
     # Get image and apply transformation
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -346,6 +369,6 @@ def testing(cfg, model, epoch, use_amp):
 
         file_type = get_file_type(img_pth)
         if file_type == "image":
-            vis_testing(cfg, model, img_pth, epoch, name, use_amp)
+            vis_testing(cfg, model, img_pth, epoch=epoch, name=name, use_amp=use_amp)
         else:
             continue

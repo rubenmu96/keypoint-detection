@@ -2,7 +2,7 @@ import warnings
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
 from src.utils import (
@@ -92,13 +92,10 @@ def compute_loss(cfg, preds, targets):
             targets, output_shape=(preds.shape[2], preds.shape[3]), sigma=cfg.sigma
         )
         return criterion_fn(preds, targets)
-    
     elif cfg.model_name == "KeypointRCNN":
         return _calculate_keypoint_loss(preds, targets)
-    
     elif cfg.model_name == "ResNetKeypoint":
         return criterion_fn(preds, targets)
-    
     else:
         raise ValueError(f"Unknown model: {cfg.model_name}")
 
@@ -134,27 +131,27 @@ def compute_pck(preds, targets, image_size, threshold=0.05):
         preds = preds.view(preds.shape[0], -1, 2)
     if targets.ndim == 2:
         targets = targets.view(targets.shape[0], -1, 2)
-    
+
     # Cast to float to avoid norm() error with integer tensors
     preds = preds.float()
     targets = targets.float()
-    
+
     batch_size, num_keypoints, _ = preds.shape
-    
+
     # Compute Euclidean distances
     distances = torch.norm(preds - targets, dim=-1)  # [B, K]
 
     h, w = image_size
     normalizer = np.sqrt(h**2 + w**2)  # Image diagonal
-    
+
     # Normalize distances and check against threshold
     normalized_distances = distances / normalizer
     correct = (normalized_distances <= threshold).float()
-    
+
     # Compute metrics
     pck_per_keypoint = correct.mean(dim=0)  # [K]
     pck_overall = correct.mean().item()
-    
+
     return {
         "pck": pck_overall,
         "pck_per_keypoint": pck_per_keypoint.cpu().numpy(),
@@ -186,17 +183,17 @@ def compute_mpjpe(preds, targets):
         preds = preds.view(preds.shape[0], -1, 2)
     if targets.ndim == 2:
         targets = targets.view(targets.shape[0], -1, 2)
-    
+
     # Cast to float
     preds = preds.float()
     targets = targets.float()
-    
+
     # Euclidean distance per keypoint
     distances = torch.norm(preds - targets, dim=-1)  # [B, K]
-    
+
     mpjpe = distances.mean()
     mpjpe_per_kp = distances.mean(dim=0)
-    
+
     return {
         "mpjpe": mpjpe.item(),
         "mpjpe_per_keypoint": mpjpe_per_kp.cpu().numpy(),
@@ -229,19 +226,19 @@ def compute_accuracy(cfg, preds, targets, image_size=None, thresholds=[0.05, 0.1
     elif cfg.model_name == "KeypointRCNN":
         pred_coords = []
         target_coords = []
-        
+
         for pred_dict, target_dict in zip(preds, targets):
             if pred_dict["keypoints"].shape[0] > 0:
                 pred_coords.append(pred_dict["keypoints"][0, :, :2])
                 target_coords.append(target_dict["keypoints"][0, :, :2])
-        
+
         if not pred_coords:
             metrics = {}
             metrics["mpjpe"] = float("inf")
             for thr in thresholds:
                 metrics[f"pck@{thr}"] = 0.0
             return metrics
-        
+
         preds = torch.stack(pred_coords)
         targets = torch.stack(target_coords)
 
@@ -257,7 +254,7 @@ def compute_accuracy(cfg, preds, targets, image_size=None, thresholds=[0.05, 0.1
 
     metrics = {}
     metrics["mpjpe"] = compute_mpjpe(preds, targets)["mpjpe"]
-    
+
     for thr in thresholds:
         metrics[f"pck@{thr}"] = compute_pck(
             preds, targets, image_size=(h, w), threshold=thr

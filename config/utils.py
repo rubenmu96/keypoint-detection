@@ -1,6 +1,8 @@
-import torch
+"""Convert configs between config classes, argparse arguments and JSON-friendly dicts."""
 import inspect
 from types import SimpleNamespace
+
+import torch
 
 def update_cfg_from_args(cfg, args):
     """Combine parser args and config"""
@@ -9,15 +11,15 @@ def update_cfg_from_args(cfg, args):
             setattr(cfg, key, value)
     return cfg
 
-def dict_to_config(d):
+def dict_to_config(d) -> SimpleNamespace:
     """Convert dict to config"""
     config = SimpleNamespace()
     for k, v in d.items():
         setattr(config, k, v)
-    
+
     if not hasattr(config, 'device'):
         config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     return config
 
 def config_to_dict(config):

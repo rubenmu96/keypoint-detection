@@ -12,10 +12,11 @@ matplotlib = "^3.10.3"
 numpy = "^2.3.0"
 pytubefix = ">=8.13.1"
 validators = ">=0.35.0"
-opencv-python = ">=4.11.0.86"
 imagesize = "^1.4.1"
 
-onnxruntime = ">=1.22"
+# onnxruntime and onnxruntime-gpu unpack into the same "onnxruntime" package
+# directory and overwrite each other, so only one may be installed per platform.
+onnxruntime = { version = ">=1.22", markers = "sys_platform != 'win32'" }
 torch = [
     { version = ">=2.7.0", markers = "sys_platform == 'win32'",  source = "torch_cuda128" },
     { version = ">=2.7.0", markers = "sys_platform == 'linux'",  source = "torch_cpu" },
@@ -29,6 +30,20 @@ torchvision = [
 pandas = "^3.0.1"
 onnx = "1.21.0"
 albumentations = "^2.0.8"
+tqdm = "^4.67.3"
+opencv-python = "^5.0.0.93"
+onnxruntime-gpu = { version = "^1.30.0", markers = "sys_platform == 'win32'" }
+
+# onnxruntime-gpu 1.30 is built against CUDA 13 / cuDNN 9. Torch ships only its own
+# CUDA 12.8 DLLs, so the CUDA 13 runtime has to be installed separately for
+# ort.preload_dlls() to find it. ~1.1 GB on disk.
+nvidia-cublas = { version = "^13.7", markers = "sys_platform == 'win32'" }
+nvidia-cufft = { version = "^12.4", markers = "sys_platform == 'win32'" }
+nvidia-curand = { version = "^10.4", markers = "sys_platform == 'win32'" }
+nvidia-cuda-runtime = { version = "^13.4", markers = "sys_platform == 'win32'" }
+nvidia-cuda-nvrtc = { version = "^13.4", markers = "sys_platform == 'win32'" }
+nvidia-nvjitlink = { version = "^13.4", markers = "sys_platform == 'win32'" }
+nvidia-cudnn-cu13 = { version = "^9.26", markers = "sys_platform == 'win32'" }
 
 [[tool.poetry.source]]
 name = "torch_cuda128"
@@ -47,6 +62,36 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
 pytest = "^8.0"
+pylint = "^4.0"
+ruff = "^0.14"
+mypy = "^1.18"
+
+[tool.pylint.main]
+# Lint the whole tree, minus the test suite and the in-project virtualenv that CI builds.
+recursive = true
+ignore-patterns = ["test_.*?py"]
+ignore-paths = ["^\\.venv/.*$"]
+
+[tool.pylint.design]
+# max-positional-arguments stays at the default (5): fix those hits by making
+# options keyword-only with `*` rather than raising the limit.
+max-args = 8
+
+[tool.pylint.messages_control]
+disable = [
+    "no-member",
+    "missing-module-docstring",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = ["^\\.venv/"]
+# src/ has no __init__.py, so treat the repo root as the import base.
+explicit_package_bases = true
+mypy_path = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

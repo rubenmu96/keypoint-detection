@@ -37,3 +37,18 @@ jobs:
 
       - name: Run tests
         run: poetry run pytest --tb=short -q
+
+      # Each check runs even if an earlier one failed, so a single push reports
+      # every problem instead of only the first.
+      - name: Run ruff
+        if: ${{ !cancelled() }}
+        run: poetry run ruff check .
+
+      - name: Run mypy
+        if: ${{ !cancelled() }}
+        run: poetry run mypy .
+
+      # Test modules are skipped via ignore-patterns in [tool.pylint.main].
+      - name: Run pylint
+        if: ${{ !cancelled() }}
+        run: poetry run pylint .

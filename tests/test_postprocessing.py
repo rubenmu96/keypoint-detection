@@ -8,7 +8,6 @@ Covers:
   - kps_postprocessor         – full pipeline integration
 """
 import numpy as np
-import pytest
 
 from src.inference.processing import (
     filter_low_probabilities,
