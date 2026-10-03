@@ -28,7 +28,7 @@ torchvision = [
     { version = ">=0.22.0", markers = "sys_platform == 'darwin'" },
 ]
 pandas = "^3.0.1"
-onnx = "1.21.0"
+onnx = "1.22.0"
 albumentations = "^2.0.8"
 tqdm = "^4.67.3"
 opencv-python = "^5.0.0.93"
