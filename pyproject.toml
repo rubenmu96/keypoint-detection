@@ -73,6 +73,10 @@ ignore-patterns = ["test_.*?py"]
 # Matches directory base names, so it works whatever the path prefix. A path regex
 # like ^\.venv/ never matches, because pylint sees "./.venv/..." when linting ".".
 ignore = [".venv"]
+# Fail CI when the score drops below the threshold, and always on errors (E) and
+# fatal problems (F): a real bug must not be averaged away by an otherwise good score.
+fail-under = 9.5
+fail-on = ["E", "F"]
 
 [tool.pylint.design]
 # max-positional-arguments stays at the default (5): fix those hits by making
