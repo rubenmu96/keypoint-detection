@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A normal run takes a few minutes; without a limit a stuck job runs for 6 hours.
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4

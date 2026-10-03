@@ -70,7 +70,9 @@ mypy = "^1.18"
 # Lint the whole tree, minus the test suite and the in-project virtualenv that CI builds.
 recursive = true
 ignore-patterns = ["test_.*?py"]
-ignore-paths = ["^\\.venv/.*$"]
+# Matches directory base names, so it works whatever the path prefix. A path regex
+# like ^\.venv/ never matches, because pylint sees "./.venv/..." when linting ".".
+ignore = [".venv"]
 
 [tool.pylint.design]
 # max-positional-arguments stays at the default (5): fix those hits by making
@@ -88,7 +90,6 @@ disable = [
 
 [tool.mypy]
 ignore_missing_imports = true
-exclude = ["^\\.venv/"]
 # src/ has no __init__.py, so treat the repo root as the import base.
 explicit_package_bases = true
 mypy_path = "."
